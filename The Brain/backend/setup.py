@@ -93,6 +93,8 @@ class LLMResult:
     message: str
     # Store the full provider response for debugging or advanced frontend use.
     raw: dict[str, Any]
+    # Store the model that was requested for this response.
+    model: str | None = None
 
 
 # Define a small status container for startup readiness.
@@ -168,18 +170,22 @@ class LLMConnector:
         await self._client.aclose()
 
     # Send an already-built list of chat messages to the remote LLM.
-    async def send_messages(self, messages: list[dict[str, str]], temperature: float = 0.2, max_tokens: int = 800) -> LLMResult:
+    async def send_messages(self, messages: list[dict[str, str]], temperature: float = 0.2, max_tokens: int = 800, model_name: str | None = None) -> LLMResult:
+        # Choose the per-request model when one is provided, otherwise use the configured default model.
+        selected_model = model_name or self.settings.llm_model_name
         # Build the OpenAI-compatible chat completion request body.
-        payload = {"model": self.settings.llm_model_name, "messages": messages, "temperature": temperature, "max_tokens": max_tokens}
+        payload = {"model": selected_model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens}
         # Send the request and retry transient provider failures.
         raw = await self._request_with_retries("POST", "/chat/completions", json=payload)
         # Return both the extracted text and the raw provider response.
-        return LLMResult(message=self._extract_text(raw), raw=raw)
+        return LLMResult(message=self._extract_text(raw), raw=raw, model=selected_model)
 
     # Stream an already-built list of chat messages and yield text tokens as they arrive.
-    async def stream_messages(self, messages: list[dict[str, str]], temperature: float = 0.2, max_tokens: int = 800) -> AsyncIterator[str]:
+    async def stream_messages(self, messages: list[dict[str, str]], temperature: float = 0.2, max_tokens: int = 800, model_name: str | None = None) -> AsyncIterator[str]:
+        # Choose the per-request model when one is provided, otherwise use the configured default model.
+        selected_model = model_name or self.settings.llm_model_name
         # Build the OpenAI-compatible streaming chat completion request body.
-        payload = {"model": self.settings.llm_model_name, "messages": messages, "temperature": temperature, "max_tokens": max_tokens, "stream": True}
+        payload = {"model": selected_model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens, "stream": True}
         # Open a streaming HTTP response from the LLM provider.
         async with self._client.stream("POST", "/chat/completions", json=payload) as response:
             # Validate the streaming HTTP status before reading tokens.
@@ -210,13 +216,13 @@ class LLMConnector:
                     yield token
 
     # Fill a human prompt template, wrap it with a system prompt, and send both to the LLM.
-    async def send_message_to_llm_wrapped_by(self, system_prompt: str, human_prompt_template: str, values: dict[str, Any] | None = None, temperature: float = 0.2, max_tokens: int = 1200) -> LLMResult:
+    async def send_message_to_llm_wrapped_by(self, system_prompt: str, human_prompt_template: str, values: dict[str, Any] | None = None, temperature: float = 0.2, max_tokens: int = 1200, model_name: str | None = None) -> LLMResult:
         # Convert prompt values into a safe dict that leaves missing placeholders visible.
         prompt_values = SafePromptValues(values or {})
         # Format the human prompt with the provided values.
         human_prompt = human_prompt_template.format_map(prompt_values)
         # Send the wrapped system and human messages to the provider.
-        return await self.send_messages(messages=[{"role": "system", "content": system_prompt.strip()}, {"role": "user", "content": human_prompt.strip()}], temperature=temperature, max_tokens=max_tokens)
+        return await self.send_messages(messages=[{"role": "system", "content": system_prompt.strip()}, {"role": "user", "content": human_prompt.strip()}], temperature=temperature, max_tokens=max_tokens, model_name=model_name)
 
     # Validate the HTTP status for a streaming provider response.
     async def _raise_for_stream_status(self, response: httpx.Response) -> None:
