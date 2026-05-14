@@ -1,17 +1,19 @@
-import os #To access environment variables (where the secret token is stored)
+import os
 import re
-from dotenv import load_dotenv #To load environment variables from a .env file
-from github import Github , GithubException #To interact with the GitHub API and handle exceptions
-from file_filter import FileFilter #To filter out unwanted files based on the criteria defined in the FileFilter class
+import base64
+from dotenv import load_dotenv
+from github import Github, GithubException
+from file_filter import FileFilter
 
 load_dotenv()
 
 class GitHubIngestor:
     def __init__(self, token=None, file_filter=None):
-        self.token =token or os.getenv('GITHUB_TOKEN') #Get the GitHub token from the environment variable GITHUB_TOKEN. This token is required to authenticate with the GitHub API. If the token is not set, raise a ValueError to inform the user that they need to set the GITHUB_TOKEN in their environment variables.
-        if not self.token:
-            raise ValueError("GitHub token not found. Please provide a token or set GITHUB_TOKEN in .env")
-        self.gh =Github(self.token) #Initialize the GitHub client with the token
+        self.token =token or os.getenv('GITHUB_TOKEN') #Get the GitHub token from the environment variable GITHUB_TOKEN if it is set
+        if self.token:
+            self.gh =Github(self.token) #Initialize the GitHub client with the token
+        else:
+            self.gh = Github() #If no token is provided, initialize the GitHub client without authentication (limited access)
         self.filter = file_filter or FileFilter()
 
     def parse_github_url(self, url):
@@ -26,9 +28,15 @@ class GitHubIngestor:
         return owner, repo 
    
     def check_connection(self):
+        # Check if the GitHub client is authenticated by trying to access the user's login information. 
+        # If the token is valid, it will return the username.
         try:
-            user = self.gh.get_user() #Try to get the authenticated user's information to check if the connection is successful 
-            return user.login #If successful, return the user's login name
+            if self.token:
+                user = self.gh.get_user()
+                return f"Authenticated as: {user.login}"
+            else:
+                self.gh.get_rate_limit()
+                return "Connected Anonymously (Rate limited)"
         except Exception as e:
             print(f"Connection failed: {e}")
             return False
@@ -67,3 +75,17 @@ class GitHubIngestor:
                 
         except Exception as e:
             return {"error": f"An unexpected error occurred: {str(e)}"}
+
+    def get_file_content(self, owner, repo_name, file_sha):
+        # Retrieve the content of a file from the GitHub repository using its SHA.
+        try:
+            repo = self.gh.get_repo(f"{owner}/{repo_name}")
+            blob = repo.get_git_blob(file_sha)
+            # If the blob is encoded in base64, decode it to get the original content. Otherwise, return the content as is.
+            if blob.encoding == "base64":
+                return base64.b64decode(blob.content).decode("utf-8", errors="replace")
+            return blob.content
+        except GithubException as e:
+            return None
+        except Exception:
+            return None
