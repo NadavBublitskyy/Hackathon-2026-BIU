@@ -1,0 +1,61 @@
+{
+  "project_name": "CloseAIProject",
+  "total_files": 5,
+  "files": [
+    {
+      "path": "main.py",
+      "name": "main.py",
+      "size_bytes": 1250,
+      "imports": ["src.auth.manager", "src.database.handler", "src.utils.logger"],
+      "definitions": {
+        "classes": ["TaskFlowApp"],
+        "functions": ["initialize_system", "shutdown"],
+        "variables": ["APP_VERSION", "DEBUG_MODE"]
+      }
+    },
+    {
+      "path": "src/auth/manager.py",
+      "name": "manager.py",
+      "size_bytes": 2100,
+      "imports": ["src.database.handler", "jwt", "datetime"],
+      "definitions": {
+        "classes": ["AuthManager", "SessionInfo"],
+        "functions": ["hash_password", "verify_token"],
+        "variables": ["TOKEN_EXPIRY_MINUTES"]
+      }
+    },
+    {
+      "path": "src/database/handler.py",
+      "name": "handler.py",
+      "size_bytes": 3400,
+      "imports": ["sqlite3", "src.utils.logger"],
+      "definitions": {
+        "classes": ["DBConnection", "QueryBuilder"],
+        "functions": ["connect_db", "execute_migration"],
+        "variables": ["DB_PATH"]
+      }
+    },
+    {
+      "path": "src/utils/logger.py",
+      "name": "logger.py",
+      "size_bytes": 850,
+      "imports": ["logging", "os"],
+      "definitions": {
+        "classes": ["CustomLogger"],
+        "functions": ["get_timestamped_log"],
+        "variables": ["LOG_FORMAT"]
+      }
+    },
+    {
+      "path": "src/constants.py",
+      "name": "constants.py",
+      "size_bytes": 300,
+      "imports": [],
+      "definitions": {
+        "classes": [],
+        "functions": [],
+        "variables": ["STATUS_SUCCESS", "STATUS_ERROR", "RETRY_LIMIT"]
+      }
+    }
+  ]
+}
