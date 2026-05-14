@@ -2,6 +2,8 @@
 
 # Import asyncio so retry waits can sleep without blocking FastAPI's event loop.
 import asyncio
+# Import json so streamed provider events can be decoded.
+import json
 # Import logging so startup and provider errors are written to the app logs.
 import logging
 # Import dataclass so simple result/status containers can be declared with less boilerplate.
@@ -10,8 +12,8 @@ from dataclasses import dataclass
 from functools import lru_cache
 # Import Lock so singleton client creation is thread-safe.
 from threading import Lock
-# Import Any so prompt values and raw provider responses can be typed flexibly.
-from typing import Any
+# Import Any and AsyncIterator so prompt values, raw responses, and token streams can be typed.
+from typing import Any, AsyncIterator
 
 # Import httpx so the service can call the OpenRouter/OpenAI-compatible HTTP API.
 import httpx
@@ -174,6 +176,39 @@ class LLMConnector:
         # Return both the extracted text and the raw provider response.
         return LLMResult(message=self._extract_text(raw), raw=raw)
 
+    # Stream an already-built list of chat messages and yield text tokens as they arrive.
+    async def stream_messages(self, messages: list[dict[str, str]], temperature: float = 0.2, max_tokens: int = 800) -> AsyncIterator[str]:
+        # Build the OpenAI-compatible streaming chat completion request body.
+        payload = {"model": self.settings.llm_model_name, "messages": messages, "temperature": temperature, "max_tokens": max_tokens, "stream": True}
+        # Open a streaming HTTP response from the LLM provider.
+        async with self._client.stream("POST", "/chat/completions", json=payload) as response:
+            # Validate the streaming HTTP status before reading tokens.
+            await self._raise_for_stream_status(response)
+            # Iterate over the provider's Server-Sent Event lines.
+            async for line in response.aiter_lines():
+                # Ignore empty heartbeat or separator lines.
+                if not line:
+                    # Continue to the next streamed line.
+                    continue
+                # Ignore non-data SSE fields.
+                if not line.startswith("data:"):
+                    # Continue to the next streamed line.
+                    continue
+                # Remove the SSE data prefix.
+                data = line.removeprefix("data:").strip()
+                # Stop when the provider marks the stream as finished.
+                if data == "[DONE]":
+                    # End the token generator.
+                    break
+                # Convert the provider event JSON into a Python dictionary.
+                event = self._parse_stream_event(data)
+                # Extract the next content token from the event.
+                token = self._extract_stream_token(event)
+                # Yield non-empty tokens to the FastAPI SSE response.
+                if token:
+                    # Send the token to the caller immediately.
+                    yield token
+
     # Fill a human prompt template, wrap it with a system prompt, and send both to the LLM.
     async def send_message_to_llm_wrapped_by(self, system_prompt: str, human_prompt_template: str, values: dict[str, Any] | None = None, temperature: float = 0.2, max_tokens: int = 1200) -> LLMResult:
         # Convert prompt values into a safe dict that leaves missing placeholders visible.
@@ -182,6 +217,65 @@ class LLMConnector:
         human_prompt = human_prompt_template.format_map(prompt_values)
         # Send the wrapped system and human messages to the provider.
         return await self.send_messages(messages=[{"role": "system", "content": system_prompt.strip()}, {"role": "user", "content": human_prompt.strip()}], temperature=temperature, max_tokens=max_tokens)
+
+    # Validate the HTTP status for a streaming provider response.
+    async def _raise_for_stream_status(self, response: httpx.Response) -> None:
+        # Treat HTTP 401 as a clear invalid API key problem.
+        if response.status_code == 401:
+            # Raise the auth-specific error used by API routes.
+            raise LLMAuthError("Invalid API Key")
+        # Return immediately when the provider accepted the stream request.
+        if response.status_code < 400:
+            # No error handling is needed for successful status codes.
+            return
+        # Read the response body so provider error details are not lost.
+        body = (await response.aread()).decode("utf-8", errors="replace")
+        # Treat rate limits and server errors as temporary provider failures.
+        if response.status_code == 429 or response.status_code >= 500:
+            # Raise a retryable LLM error.
+            raise LLMError(f"LLM provider temporarily unavailable ({response.status_code}).")
+        # Extract a readable provider error message.
+        detail = self._provider_error_detail_from_text(body)
+        # Raise a clear rejected-request error.
+        raise LLMError(f"LLM provider rejected the request ({response.status_code}): {detail}")
+
+    # Parse one provider SSE data line into a dictionary.
+    def _parse_stream_event(self, data: str) -> dict[str, Any]:
+        # Try to decode the event JSON.
+        try:
+            # Return the decoded event object.
+            event = json.loads(data)
+        # Convert invalid provider JSON into a controlled LLM error.
+        except json.JSONDecodeError as exc:
+            # Raise a frontend-safe parsing failure.
+            raise LLMError("LLM provider returned invalid stream JSON.") from exc
+        # Detect provider error events inside the stream.
+        if isinstance(event, dict) and event.get("error"):
+            # Raise the provider error as an LLM failure.
+            raise LLMError(str(event["error"]))
+        # Return valid provider events.
+        return event
+
+    # Extract one text token from a streaming OpenAI-compatible event.
+    @staticmethod
+    # Define this as static because it only uses the event argument.
+    def _extract_stream_token(event: dict[str, Any]) -> str:
+        # Read the choices array from the provider stream event.
+        choices = event.get("choices", [])
+        # Return an empty token when no choices were streamed.
+        if not choices:
+            # Return an empty string because there is no delta content.
+            return ""
+        # Read the delta object from the first streamed choice.
+        delta = choices[0].get("delta", {})
+        # Read the text token from the delta object.
+        content = delta.get("content", "")
+        # Return the token when it is text.
+        if isinstance(content, str):
+            # Return the streamed token.
+            return content
+        # Return an empty string when the delta content is not plain text.
+        return ""
 
     # Send a provider request with retries for network and temporary provider failures.
     async def _request_with_retries(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
@@ -257,6 +351,35 @@ class LLMConnector:
             return response.text[:300]
         # Read the common provider error field.
         error = body.get("error")
+        # Handle provider errors shaped like {"error": {"message": "..."} }.
+        if isinstance(error, dict):
+            # Read the nested message value.
+            message = error.get("message")
+            # Return the nested message when it is text.
+            if isinstance(message, str):
+                # Return the provider message.
+                return message
+        # Handle provider errors shaped like {"error": "..."}.
+        if isinstance(error, str):
+            # Return the error string directly.
+            return error
+        # Return a fallback when the provider error shape is unknown.
+        return "Unknown provider error."
+
+    # Extract the best provider error message from a raw response body.
+    @staticmethod
+    # Define this as static because it only uses the response text argument.
+    def _provider_error_detail_from_text(response_text: str) -> str:
+        # Try to parse the raw provider error text as JSON.
+        try:
+            # Decode the raw provider error text.
+            body = json.loads(response_text)
+        # Fall back to plain text when the body is not JSON.
+        except ValueError:
+            # Return the first part of the raw response text.
+            return response_text[:300]
+        # Read the common provider error field.
+        error = body.get("error") if isinstance(body, dict) else None
         # Handle provider errors shaped like {"error": {"message": "..."} }.
         if isinstance(error, dict):
             # Read the nested message value.
