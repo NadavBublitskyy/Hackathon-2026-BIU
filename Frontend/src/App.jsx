@@ -2,7 +2,7 @@ import { BrainCircuit, GitBranch } from "lucide-react";
 import { ChatPanel } from "./components/ChatPanel/ChatPanel";
 import { GraphNodeDetails } from "./components/GraphNodeDetails/GraphNodeDetails";
 import { LoadingOverlay } from "./components/LoadingOverlay/LoadingOverlay";
-import { RepoGraph } from "./components/RepoGraph/RepoGraph";
+import { RepoGraphFlow } from "./components/RepoGraph/RepoGraphFlow";
 import { RepoUrlForm } from "./components/RepoUrlForm/RepoUrlForm";
 import { WorkspaceLayout } from "./components/WorkspaceLayout/WorkspaceLayout";
 import { useChatController } from "./hooks/useChatController";
@@ -62,7 +62,7 @@ export default function App() {
           }
           rightPanel={
             <div className="graph-workspace">
-              <RepoGraph
+              <RepoGraphFlow
                 graphData={repoSession.graphData}
                 selectedNode={repoSession.selectedNode}
                 onSelectNode={repoSession.setSelectedNode}

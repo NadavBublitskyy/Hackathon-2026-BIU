@@ -486,6 +486,29 @@ button:disabled {
   background: #fbfcfe;
 }
 
+.repo-flow-canvas {
+  position: relative;
+  padding: 0;
+}
+
+.repo-flow-canvas .react-flow {
+  min-height: 420px;
+  background: #fbfcfe;
+}
+
+.repo-flow-canvas .react-flow__node {
+  font-size: 12px;
+}
+
+.repo-flow-empty {
+  height: 100%;
+  min-height: 420px;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
 .graph-canvas svg {
   width: 100%;
   height: 100%;
