@@ -18,6 +18,8 @@ from fastapi.responses import StreamingResponse
 # Import Pydantic tools so request bodies can be validated.
 from pydantic import BaseModel, Field
 
+# Import the attribution verifier that checks LLM-mentioned paths against structure.json.
+from backend.code_attribution import CodeAttributionVerifier
 # Import context-aware prompt helpers for the /api/blueprint endpoint.
 from backend.llm_blueprint import build_context_aware_messages, build_context_debug_prompt
 # Import LLM setup, connector, settings, and error types from the setup module.
@@ -216,8 +218,10 @@ async def blueprint(prompt: str = Form(..., min_length=1), structure_json: Uploa
         logger.warning("LLM blueprint request failed: %s", exc)
         # Raise a 502 response with a safe error message.
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    # Return only the LLM response text.
-    return {"response": result.message}
+    # Verify that every file path mentioned by the LLM exists in structure.json.
+    paths_verified = CodeAttributionVerifier.verify_response_paths(structure_data, result.message)
+    # Return the LLM response text and the grounding verification result.
+    return {"response": result.message, "paths_verified": paths_verified}
 
 
 # Register the streaming context-aware blueprint endpoint.
