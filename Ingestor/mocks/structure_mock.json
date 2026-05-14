@@ -1,0 +1,16 @@
+{
+  "repo_name": "CloseAIProject",
+  "files": [
+    {
+      "path": "src/auth/login.py",
+      "name": "login.py",
+      "size_bytes": 1048,
+      "imports": ["src.utils.encryption", "os"],
+      "definitions": {
+        "classes": ["Authenticator"],
+        "functions": ["verify_token", "logout"],
+        "variables": ["MAX_RETRIES"] 
+      }
+    }
+  ]
+}

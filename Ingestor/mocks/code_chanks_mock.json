@@ -1,0 +1,22 @@
+[
+  {
+    "chunk_id": "c1",
+    "file_path": "src/auth/login.py",
+    "type": "function",
+    "name": "verify_token",
+    "scope": "global", 
+    "content": "def verify_token(token):\n    pass",
+    "start_line": 10,
+    "end_line": 15
+  },
+  {
+    "chunk_id": "c2",
+    "file_path": "src/auth/login.py",
+    "type": "method",
+    "name": "login_user",
+    "scope": "Authenticator", 
+    "content": "def login_user(self, username):\n    pass",
+    "start_line": 25,
+    "end_line": 35
+  }
+]
