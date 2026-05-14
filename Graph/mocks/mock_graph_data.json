@@ -1,0 +1,81 @@
+{
+  "nodes": [
+    {
+      "id": "src/auth/login.py",
+      "label": "login.py",
+      "group": "auth",
+      "definitions": {
+        "classes": ["Authenticator"],
+        "functions": ["verify_token", "logout"],
+        "variables": ["MAX_RETRIES"]
+      }
+    },
+    {
+      "id": "src/utils/encryption.py",
+      "label": "encryption.py",
+      "group": "utils",
+      "definitions": {
+        "classes": [],
+        "functions": ["encrypt_password", "decrypt_token"],
+        "variables": ["SECRET_KEY"]
+      }
+    },
+    {
+      "id": "src/main.py",
+      "label": "main.py",
+      "group": "src",
+      "definitions": {
+        "classes": [],
+        "functions": ["main", "create_app"],
+        "variables": []
+      }
+    },
+    {
+      "id": "src/routes/user_routes.py",
+      "label": "user_routes.py",
+      "group": "routes",
+      "definitions": {
+        "classes": [],
+        "functions": ["login_route", "logout_route", "get_current_user"],
+        "variables": []
+      }
+    },
+    {
+      "id": "src/database/db.py",
+      "label": "db.py",
+      "group": "database",
+      "definitions": {
+        "classes": ["DatabaseClient"],
+        "functions": ["connect_db", "get_user_by_id"],
+        "variables": ["DB_URL"]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "src/auth/login.py",
+      "target": "src/utils/encryption.py",
+      "type": "import"
+    },
+    {
+      "source": "src/auth/login.py",
+      "target": "src/database/db.py",
+      "type": "import"
+    },
+    {
+      "source": "src/main.py",
+      "target": "src/routes/user_routes.py",
+      "type": "import"
+    },
+    {
+      "source": "src/routes/user_routes.py",
+      "target": "src/auth/login.py",
+      "type": "import"
+    },
+    {
+      "source": "src/routes/user_routes.py",
+      "target": "src/database/db.py",
+      "type": "import"
+    }
+  ]
+}
