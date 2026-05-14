@@ -59,9 +59,32 @@ def build_snippet_results(results: dict) -> list[dict]:
     return snippets
 
 
+def filter_snippets_by_relative_score(
+    snippets: list[dict],
+    relative_score_threshold: float,
+    min_score: float,
+) -> list[dict]:
+    """
+    Keeps snippets close enough to the best result score.
+    """
+
+    if len(snippets) == 0:
+        return []
+
+    best_score = max(snippet["score"] for snippet in snippets)
+    minimum_score = best_score * relative_score_threshold
+
+    return [
+        snippet
+        for snippet in snippets
+        if snippet["score"] >= minimum_score and snippet["score"] >= min_score
+    ]
+
+
 def retrieve_snippets(
     query: str,
-    top_k: int = 5,
+    relative_score_threshold: float = 0.85,
+    min_score: float = 0.40,
     collection_name: str = DEFAULT_COLLECTION_NAME,
     persist_directory: str = DEFAULT_PERSIST_DIRECTORY,
 ) -> list[dict]:
@@ -72,8 +95,11 @@ def retrieve_snippets(
     if query is None or query.strip() == "":
         raise ValueError("query cannot be empty.")
 
-    if top_k <= 0:
-        raise ValueError("top_k must be greater than 0.")
+    if relative_score_threshold <= 0:
+        raise ValueError("relative_score_threshold must be greater than 0.")
+
+    if min_score < 0:
+        raise ValueError("min_score cannot be negative.")
 
     client = chromadb.PersistentClient(path=persist_directory)
 
@@ -85,10 +111,17 @@ def retrieve_snippets(
 
         raise
 
+    indexed_chunks_count = collection.count()
+
+    if indexed_chunks_count == 0:
+        return []
+
     results = collection.query(
         query_texts=[query],
-        n_results=top_k,
+        n_results=indexed_chunks_count,
         include=["documents", "metadatas", "distances"],
     )
 
-    return build_snippet_results(results)
+    snippets = build_snippet_results(results)
+
+    return filter_snippets_by_relative_score(snippets, relative_score_threshold, min_score)

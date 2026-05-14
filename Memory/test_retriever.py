@@ -2,7 +2,7 @@ from Memory.retriever import retrieve_snippets
 
 
 def main() -> None:
-    snippets = retrieve_snippets("How are logs created?", top_k=3)
+    snippets = retrieve_snippets(query="How does the payment system process credit cards?")
 
     print("Retriever works!")
     print(f"Found {len(snippets)} relevant snippets")
