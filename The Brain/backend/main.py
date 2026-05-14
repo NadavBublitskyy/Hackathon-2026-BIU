@@ -19,7 +19,7 @@ from backend.config import get_settings
 # Import LLM lifecycle helpers from the dedicated client module.
 from backend.llm_client import close_llm_connection, setup_llm_connection
 # Import route modules so this file only registers routers.
-from backend.routes import blueprint_routes, chat_routes, status_routes
+from backend.routes import blueprint_routes, chat_routes, classification_routes, repo_routes, status_routes
 
 # Resolve likely project roots for local and container runs.
 project_root_candidates = [
@@ -71,6 +71,10 @@ app.add_middleware(
 
 # Register status endpoints.
 app.include_router(status_routes.router)
+# Register repository ingestion and retrieval endpoints.
+app.include_router(repo_routes.router)
+# Register prompt classification endpoints.
+app.include_router(classification_routes.router)
 # Register chat endpoints.
 app.include_router(chat_routes.router)
 # Register context-aware blueprint endpoints.

@@ -1,4 +1,4 @@
-# This file defines how to run the Brain backend in Docker or Podman Compose.
+# This file defines how to run the Repo Explorer stack in Docker or Podman Compose.
 
 # Set the Compose project name, defaulting to repo-explorer when no env value is provided.
 name: ${COMPOSE_PROJECT_NAME:-repo-explorer}
@@ -28,7 +28,7 @@ services:
       # Pass the OpenRouter API key into the container when it exists.
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       # Pass the frontend origins allowed to call the backend.
-      BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173}
     # Define host-to-container port mappings.
     ports:
       # Expose container port 8000 on the configured host backend port.
@@ -53,3 +53,50 @@ services:
       retries: 3
       # Give the service 20 seconds to start before healthcheck failures count.
       start_period: 20s
+
+  # Define the React/Vite frontend service.
+  frontend:
+    # Define how the frontend image should be built.
+    build:
+      # Use the Frontend folder as the Docker build context.
+      context: ./Frontend
+      # Use the Containerfile inside Frontend as the image recipe.
+      dockerfile: Containerfile
+      # Pass browser-facing endpoint configuration into the Vite build.
+      args:
+        # Tell the browser where the Brain backend is exposed on the host.
+        VITE_BRAIN_BASE_URL: ${VITE_BRAIN_BASE_URL:-http://127.0.0.1:${BACKEND_PORT:-8000}}
+        # Configure the ingestor API path.
+        VITE_INGEST_ENDPOINT: ${VITE_INGEST_ENDPOINT:-/api/ingest}
+        # Configure the general chat API path.
+        VITE_GENERAL_CHAT_ENDPOINT: ${VITE_GENERAL_CHAT_ENDPOINT:-/api/chat/routed}
+        # Configure the repo-aware Brain API path.
+        VITE_BLUEPRINT_ENDPOINT: ${VITE_BLUEPRINT_ENDPOINT:-/api/blueprint/routed}
+        # Configure the Viki semantic retrieval API path.
+        VITE_VIKI_CONTEXT_ENDPOINT: ${VITE_VIKI_CONTEXT_ENDPOINT:-/api/memory/retrieve}
+        # Configure the prompt classification API path.
+        VITE_PROMPT_CLASSIFY_ENDPOINT: ${VITE_PROMPT_CLASSIFY_ENDPOINT:-/api/prompt/classify}
+    # Define host-to-container port mappings.
+    ports:
+      # Expose container port 80 on the configured host frontend port.
+      - "${FRONTEND_PORT:-5173}:80"
+    # Start the frontend after the backend reports healthy.
+    depends_on:
+      backend:
+        condition: service_healthy
+    # Define Docker's readiness check for the static frontend.
+    healthcheck:
+      # Define the command Docker runs to check frontend readiness.
+      test:
+        # Run the healthcheck as a shell command.
+        - CMD-SHELL
+        # Fetch the local health endpoint served by Nginx.
+        - "wget -qO- http://127.0.0.1/health >/dev/null"
+      # Run the healthcheck every 20 seconds.
+      interval: 20s
+      # Fail one healthcheck attempt if it takes longer than 5 seconds.
+      timeout: 5s
+      # Mark the service unhealthy after 3 failed healthcheck attempts.
+      retries: 3
+      # Give the service 10 seconds to start before healthcheck failures count.
+      start_period: 10s
