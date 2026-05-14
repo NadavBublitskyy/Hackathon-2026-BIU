@@ -1,22 +1,52 @@
 [
   {
-    "chunk_id": "c1",
-    "file_path": "src/auth/login.py",
-    "type": "function",
-    "name": "verify_token",
-    "scope": "global", 
-    "content": "def verify_token(token):\n    pass",
+    "chunk_id": "ch_1",
+    "file_path": "main.py",
+    "type": "class",
+    "name": "TaskFlowApp",
+    "scope": "global",
+    "content": "class TaskFlowApp:\n    def __init__(self):\n        self.db = DBConnection()\n        self.auth = AuthManager()",
     "start_line": 10,
-    "end_line": 15
+    "end_line": 14
   },
   {
-    "chunk_id": "c2",
-    "file_path": "src/auth/login.py",
+    "chunk_id": "ch_2",
+    "file_path": "src/auth/manager.py",
     "type": "method",
-    "name": "login_user",
-    "scope": "Authenticator", 
-    "content": "def login_user(self, username):\n    pass",
-    "start_line": 25,
-    "end_line": 35
+    "name": "login",
+    "scope": "AuthManager",
+    "content": "def login(self, user, pwd):\n    if verify_token(user):\n        return self.session.create(user)\n    return None",
+    "start_line": 45,
+    "end_line": 50
+  },
+  {
+    "chunk_id": "ch_3",
+    "file_path": "src/auth/manager.py",
+    "type": "function",
+    "name": "verify_token",
+    "scope": "global",
+    "content": "def verify_token(token):\n    # logic to decode jwt\n    return jwt.decode(token, secret)",
+    "start_line": 80,
+    "end_line": 83
+  },
+  {
+    "chunk_id": "ch_4",
+    "file_path": "src/database/handler.py",
+    "type": "method",
+    "name": "save_task",
+    "scope": "DBConnection",
+    "content": "def save_task(self, task_data):\n    query = \"INSERT INTO tasks VALUES (?, ?)\"\n    self.execute(query, task_data)",
+    "start_line": 110,
+    "end_line": 115
+  },
+  {
+    "chunk_id": "ch_5",
+    "file_path": "src/utils/logger.py",
+    "type": "function",
+    "name": "get_timestamped_log",
+    "scope": "global",
+    "content": "def get_timestamped_log(msg):\n    return f\"[{datetime.now()}] {msg}\"",
+    "start_line": 15,
+    "end_line": 17
   }
 ]
