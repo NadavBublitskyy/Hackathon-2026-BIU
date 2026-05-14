@@ -4,8 +4,14 @@
 import json
 # Import logging so route failures can be written to the backend logs.
 import logging
+# Import sys so the repo-root Memory package can be discovered from this app.
+import sys
+# Import importlib utilities so optional sibling routers can be discovered safely.
+import importlib.util
 # Import asynccontextmanager so FastAPI can run setup and cleanup code.
 from contextlib import asynccontextmanager
+# Import Path so the repository root can be resolved from this file location.
+from pathlib import Path
 # Import Any and AsyncIterator so responses and SSE generators can be typed.
 from typing import Any, AsyncIterator
 
@@ -17,6 +23,23 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 # Import Pydantic tools so request bodies can be validated.
 from pydantic import BaseModel, Field
+
+# Resolve likely project roots for local and container runs.
+project_root_candidates = [
+    Path(__file__).resolve().parents[2],
+    Path(__file__).resolve().parents[1],
+]
+# Add roots that contain the Memory package to Python's import path.
+for project_root in project_root_candidates:
+    if (project_root / "Memory").exists() and str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+
+if importlib.util.find_spec("Memory.api") is not None:
+    # Import the Memory API router when the Memory package is available.
+    from Memory.api import router as memory_router
+else:
+    # Keep The Brain service importable in environments that package it alone.
+    memory_router = None
 
 # Import the attribution verifier that checks LLM-mentioned paths against structure.json.
 from backend.code_attribution import CodeAttributionVerifier
@@ -130,6 +153,10 @@ app.add_middleware(
     allow_headers=["*"],
 # Close the middleware call.
 )
+
+if memory_router is not None:
+    # Register the Memory API endpoints.
+    app.include_router(memory_router)
 
 
 # Register the endpoint that reports whether the LLM client is ready.

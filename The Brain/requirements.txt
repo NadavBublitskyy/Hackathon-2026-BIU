@@ -10,3 +10,5 @@ pydantic-settings==2.7.1
 python-multipart==0.0.20
 # Uvicorn runs the FastAPI application inside the container.
 uvicorn[standard]==0.34.0
+# ChromaDB stores and retrieves Memory code chunk embeddings locally.
+chromadb

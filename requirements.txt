@@ -1,2 +1,4 @@
 networkx>=3.0
 chromadb
+fastapi
+uvicorn[standard]
