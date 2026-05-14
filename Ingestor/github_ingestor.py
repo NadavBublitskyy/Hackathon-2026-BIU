@@ -1,15 +1,18 @@
 import os #To access environment variables (where the secret token is stored)
 import re
-import token #For regular expressions to parse GitHub URLs
 from dotenv import load_dotenv #To load environment variables from a .env file
 from github import Github , GithubException #To interact with the GitHub API and handle exceptions
+from file_filter import FileFilter #To filter out unwanted files based on the criteria defined in the FileFilter class
+
+load_dotenv()
 
 class GitHubIngestor:
-    def __init__(self):
-        self.token = self.token = token or os.getenv('GITHUB_TOKEN') #Get the GitHub token from the environment variable GITHUB_TOKEN. This token is required to authenticate with the GitHub API. If the token is not set, raise a ValueError to inform the user that they need to set the GITHUB_TOKEN in their environment variables.
+    def __init__(self, token=None, file_filter=None):
+        self.token =token or os.getenv('GITHUB_TOKEN') #Get the GitHub token from the environment variable GITHUB_TOKEN. This token is required to authenticate with the GitHub API. If the token is not set, raise a ValueError to inform the user that they need to set the GITHUB_TOKEN in their environment variables.
         if not self.token:
             raise ValueError("GitHub token not found. Please provide a token or set GITHUB_TOKEN in .env")
         self.gh =Github(self.token) #Initialize the GitHub client with the token
+        self.filter = file_filter or FileFilter()
 
     def parse_github_url(self, url):
         # Regular expression to match GitHub repository URLs
@@ -37,8 +40,15 @@ class GitHubIngestor:
             default_branch = repo.default_branch #Get the default branch of the repository (usually "main" or "master")
             # Get the tree of the default branch recursively to retrieve all files in the repository
             tree = repo.get_git_tree(sha=default_branch, recursive=True) 
-            files_list = [{"path": item.path, "name": item.path.split('/')[-1],"size_bytes": item.size, 
-                           "sha": item.sha} for item in tree.tree if item.type == "blob"] 
+            files_list = []
+            for item in tree.tree:
+                if item.type == "blob" and self.filter.is_valid(item.path):
+                    files_list.append({
+                        "path": item.path,
+                        "name": item.path.split('/')[-1],
+                        "size_bytes": item.size,
+                        "sha": item.sha
+                    })
             # Return a dictionary containing the owner, repository name, 
             # and a list of files with their paths, names, sizes, and SHAs
             return {
