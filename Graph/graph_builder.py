@@ -63,6 +63,34 @@ def build_graph(structure: dict) -> dict:
     return _export_graph(graph)
 
 
+def get_node_details(structure: dict, node_id: str) -> Optional[dict]:
+    if not isinstance(structure, dict) or not isinstance(node_id, str) or not node_id.strip():
+        return None
+
+    files = structure.get("files", [])
+    if not isinstance(files, list):
+        return None
+
+    normalized_node_id = normalize_file_path(node_id)
+
+    for file_data in files:
+        if not isinstance(file_data, dict):
+            continue
+
+        file_path = _get_file_path(file_data)
+        if file_path != normalized_node_id:
+            continue
+
+        return {
+            "id": file_path,
+            "label": _get_label(file_data, file_path),
+            "group": _get_group(file_path),
+            "definitions": _get_definitions(file_data),
+        }
+
+    return None
+
+
 def _collect_relevant_files(files: list[dict]) -> list[str]:
     paths: list[str] = []
 
@@ -156,7 +184,6 @@ def _export_graph(graph: nx.DiGraph) -> dict:
                 "id": node_id,
                 "label": node_data["label"],
                 "group": node_data["group"],
-                "definitions": node_data["definitions"],
             }
             for node_id, node_data in graph.nodes(data=True)
         ],
