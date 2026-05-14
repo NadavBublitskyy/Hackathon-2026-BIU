@@ -8,6 +8,7 @@ export const endpoints = {
   generalChat: import.meta.env.VITE_GENERAL_CHAT_ENDPOINT || "/api/chat/routed",
   blueprint: import.meta.env.VITE_BLUEPRINT_ENDPOINT || "/api/blueprint/routed",
   vikiContext: import.meta.env.VITE_VIKI_CONTEXT_ENDPOINT || "/api/memory/retrieve",
+  promptClassify: import.meta.env.VITE_PROMPT_CLASSIFY_ENDPOINT || "/api/prompt/classify",
 };
 
 export const buildBackendUrl = (path) => {
