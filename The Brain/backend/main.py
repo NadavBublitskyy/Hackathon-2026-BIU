@@ -1,5 +1,7 @@
 """This file exposes The Brain service as a FastAPI API."""
 
+# Import json so uploaded context files can be decoded.
+import json
 # Import logging so route failures can be written to the backend logs.
 import logging
 # Import asynccontextmanager so FastAPI can run setup and cleanup code.
@@ -7,15 +9,15 @@ from contextlib import asynccontextmanager
 # Import Any so route responses can contain flexible JSON-compatible values.
 from typing import Any
 
-# Import Body for raw request bodies, FastAPI to create the API app, and HTTPException for controlled errors.
-from fastapi import Body, FastAPI, HTTPException
+# Import FastAPI tools for routes, uploaded files, form fields, and controlled HTTP errors.
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 # Import CORS middleware so the frontend can call this backend from the browser.
 from fastapi.middleware.cors import CORSMiddleware
 # Import Pydantic tools so request bodies can be validated.
 from pydantic import BaseModel, Field
 
-# Import blueprint prompt templates for the /api/blueprint endpoint.
-from backend.llm_blueprint import LLM_BLUEPRINT_HUMAN_PROMPT, LLM_BLUEPRINT_SYSTEM_PROMPT
+# Import context-aware prompt helpers for the /api/blueprint endpoint.
+from backend.llm_blueprint import build_context_aware_messages, build_context_debug_prompt
 # Import LLM setup, connector, settings, and error types from the setup module.
 from backend.setup import LLMAuthError, LLMConfigError, LLMError, close_llm_connection, get_llm_connector, get_llm_status, get_settings, setup_llm_connection
 
@@ -29,6 +31,20 @@ logger = logging.getLogger(__name__)
 class ChatRequest(BaseModel):
     # Store only the user's prompt so the Swagger form stays simple.
     prompt: str = Field(min_length=1)
+
+
+# Read and parse a JSON upload from Swagger or the frontend.
+async def read_json_upload(upload: UploadFile) -> Any:
+    # Read the uploaded file bytes.
+    content = await upload.read()
+    # Try to parse the uploaded bytes as JSON.
+    try:
+        # Decode the JSON payload into Python objects.
+        return json.loads(content)
+    # Convert invalid JSON into a clear HTTP 400 response.
+    except json.JSONDecodeError as exc:
+        # Tell the caller which uploaded file was invalid.
+        raise HTTPException(status_code=400, detail=f"{upload.filename or 'uploaded file'} is not valid JSON.") from exc
 
 
 # Define the FastAPI lifespan hook that connects and disconnects the LLM client.
@@ -110,12 +126,22 @@ async def chat(request: ChatRequest) -> dict[str, Any]:
 
 # Register the implementation blueprint endpoint.
 @app.post("/api/blueprint")
-# Use the blueprint prompt wrapper to generate a file-by-file implementation plan from raw prompt text.
-async def blueprint(prompt: str = Body(..., media_type="text/plain", min_length=1)) -> dict[str, Any]:
+# Use the context-aware prompt builder to answer a repo question from structure and snippets.
+async def blueprint(prompt: str = Form(..., min_length=1), structure_json: UploadFile = File(...), relevant_context_json: UploadFile = File(...)) -> dict[str, Any]:
+    # Parse the uploaded structure.json file.
+    structure_data = await read_json_upload(structure_json)
+    # Parse the uploaded relevant_context JSON file.
+    relevant_context_data = await read_json_upload(relevant_context_json)
+    # Build the exact message payload sent to the LLM.
+    messages = build_context_aware_messages(prompt, structure_data, relevant_context_data)
+    # Build a readable debug prompt that shows all three context layers.
+    generated_prompt = build_context_debug_prompt(prompt, structure_data, relevant_context_data)
+    # Log the generated prompt so debugging can inspect system, structure, snippets, and user query.
+    logger.info("Generated context-aware prompt:\n%s", generated_prompt)
     # Convert LLM errors into clear HTTP responses.
     try:
-        # Send the raw prompt through the blueprint system instructions with hardcoded LLM settings.
-        result = await get_llm_connector().send_message_to_llm_wrapped_by(system_prompt=LLM_BLUEPRINT_SYSTEM_PROMPT, human_prompt_template=LLM_BLUEPRINT_HUMAN_PROMPT, values={"current_prompt": prompt, "cycle_feedback": "None"}, temperature=0.2, max_tokens=1200)
+        # Send the assembled context-aware messages to the LLM with hardcoded settings.
+        result = await get_llm_connector().send_messages(messages=messages, temperature=0.2, max_tokens=1200)
     # Convert provider 401 errors into a frontend-clear response.
     except LLMAuthError as exc:
         # Raise a 401 response without exposing the key.
@@ -130,5 +156,5 @@ async def blueprint(prompt: str = Body(..., media_type="text/plain", min_length=
         logger.warning("LLM blueprint request failed: %s", exc)
         # Raise a 502 response with a safe error message.
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    # Return only the generated blueprint text.
-    return {"blueprint": result.message}
+    # Return only the LLM response text.
+    return {"response": result.message}
