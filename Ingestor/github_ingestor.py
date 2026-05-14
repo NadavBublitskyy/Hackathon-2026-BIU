@@ -1,13 +1,14 @@
 import os #To access environment variables (where the secret token is stored)
-import re #For regular expressions to parse GitHub URLs
+import re
+import token #For regular expressions to parse GitHub URLs
 from dotenv import load_dotenv #To load environment variables from a .env file
 from github import Github , GithubException #To interact with the GitHub API and handle exceptions
 
 class GitHubIngestor:
     def __init__(self):
-        self.token = os.getenv('GITHUB_TOKEN') #Get the GitHub token from environment variables
+        self.token = self.token = token or os.getenv('GITHUB_TOKEN') #Get the GitHub token from the environment variable GITHUB_TOKEN. This token is required to authenticate with the GitHub API. If the token is not set, raise a ValueError to inform the user that they need to set the GITHUB_TOKEN in their environment variables.
         if not self.token:
-            raise ValueError("GITHUB_TOKEN is not set in environment variables")
+            raise ValueError("GitHub token not found. Please provide a token or set GITHUB_TOKEN in .env")
         self.gh =Github(self.token) #Initialize the GitHub client with the token
 
     def parse_github_url(self, url):
