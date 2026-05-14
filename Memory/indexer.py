@@ -54,6 +54,7 @@ def index_code_chunks(chunks: list[dict], persist_directory: str = "Memory/chrom
                 "type": chunk["type"],
                 "name": chunk["name"],
                 "scope": chunk["scope"],
+                "content": chunk["content"],
                 "start_line": chunk["start_line"],
                 "end_line": chunk["end_line"],
             }
