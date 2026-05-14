@@ -3,7 +3,7 @@
 # Enable Python 3.10-style type annotations when local tools run on Python 3.9.
 from __future__ import annotations
 
-# Import asyncio so the classifier call can be bounded by a timeout.
+# Import asyncio so the classifier call can be bounded by a timeout..
 import asyncio
 # Import dataclass so classification results can be returned clearly.
 from dataclasses import dataclass
