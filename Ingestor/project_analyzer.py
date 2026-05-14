@@ -111,12 +111,11 @@ class ProjectAnalyzer:
             path = file["path"]
             ext = os.path.splitext(path)[1].lower()
             content = ingestor.get_file_content(owner, repo_name, file["sha"])
-            imports = self.extract_imports(content, ext)
+            raw_imports = self.extract_imports(content, ext)
             result[path] = {
                 "type": self.tag_metadata(path),
                 "language": self._LANGUAGE_MAP.get(ext, "Unknown"),
-                "imports": imports,
-                "internal_dependencies": self._resolve_internal_dependencies(imports, ext, path),
+                "imports": self._resolve_internal_dependencies(raw_imports, ext, path),
             }
         return result
 
