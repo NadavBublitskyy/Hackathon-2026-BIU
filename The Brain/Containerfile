@@ -1,0 +1,27 @@
+# This file builds the Docker image for The Brain FastAPI service.
+
+# Use the official slim Python image as the base runtime.
+FROM python:3.11-slim
+
+# Configure Python to avoid bytecode files, flush logs immediately, and expose port metadata.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PORT=8000
+
+# Set the container working directory.
+WORKDIR /app
+
+# Copy the Python dependency list into the image.
+COPY requirements.txt ./requirements.txt
+
+# Install the Python dependencies inside the image.
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the backend package into the image.
+COPY backend ./backend
+
+# Document that the service listens on port 8000.
+EXPOSE 8000
+
+# Start the FastAPI application with Uvicorn.
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

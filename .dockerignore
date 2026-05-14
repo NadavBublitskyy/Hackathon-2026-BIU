@@ -1,34 +1,62 @@
+# This file tells Docker which local files should not be copied into build contexts.
+
+# Ignore the Git repository metadata.
 .git
+# Ignore local IDE project settings.
 .idea
 
+# Ignore Python bytecode cache folders.
 __pycache__/
+# Ignore compiled Python bytecode files.
 *.py[cod]
+# Ignore optimized Python bytecode files.
 *.pyo
+# Ignore pytest cache output.
 .pytest_cache/
+# Ignore mypy cache output.
 .mypy_cache/
+# Ignore Ruff cache output.
 .ruff_cache/
+# Ignore coverage data files.
 .coverage
+# Ignore generated HTML coverage reports.
 htmlcov/
 
+# Ignore local Python virtual environments named .venv.
 .venv/
+# Ignore local Python virtual environments named venv.
 venv/
+# Ignore local Python virtual environments named env.
 env/
 
+# Ignore frontend dependency folders.
 node_modules/
+# Ignore npm debug logs.
 npm-debug.log*
+# Ignore Yarn debug logs.
 yarn-debug.log*
+# Ignore Yarn error logs.
 yarn-error.log*
+# Ignore pnpm debug logs.
 pnpm-debug.log*
+# Ignore frontend distribution builds.
 dist/
+# Ignore generic build output folders.
 build/
+# Ignore Next.js build output.
 .next/
 
+# Ignore the real environment file because it can contain secrets.
 .env
+# Ignore all environment variants because they can contain secrets.
 .env.*
-!.env.example
 
+# Ignore cloned repositories used as ingestor input data.
 data/repos/
+# Ignore generated JSON and other pipeline outputs.
 data/generated/
 
+# Ignore macOS filesystem metadata.
 .DS_Store
+# Ignore local log files.
 *.log

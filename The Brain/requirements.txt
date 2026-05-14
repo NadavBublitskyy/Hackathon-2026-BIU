@@ -1,0 +1,12 @@
+# This file lists the Python packages required by The Brain service.
+
+# FastAPI provides the web API framework.
+fastapi==0.115.6
+# HTTPX provides the async HTTP client for OpenRouter requests.
+httpx==0.28.1
+# Pydantic Settings loads typed configuration from environment variables and .env.
+pydantic-settings==2.7.1
+# Python Multipart lets FastAPI receive form fields and uploaded JSON files.
+python-multipart==0.0.20
+# Uvicorn runs the FastAPI application inside the container.
+uvicorn[standard]==0.34.0
