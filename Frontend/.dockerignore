@@ -1,0 +1,13 @@
+# Ignore dependencies installed on the host.
+node_modules/
+
+# Ignore local Vite build output.
+dist/
+
+# Ignore local environment files; compose passes Vite values as build args.
+.env
+.env.*
+
+# Ignore editor and OS metadata.
+.DS_Store
+.idea/
