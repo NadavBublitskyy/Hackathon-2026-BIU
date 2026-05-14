@@ -1,10 +1,8 @@
 import { GitPullRequestArrow } from "lucide-react";
 import { useMemo } from "react";
-import ReactFlow, { Background, Controls, MiniMap } from "reactflow";
+import ReactFlow, { Background, Controls } from "reactflow";
 import "reactflow/dist/style.css";
 import { createReactFlowLayout } from "./graphLayout";
-
-const nodeColor = (node) => node?.style?.borderColor || "#2563eb";
 
 export function RepoGraphFlow({ graphData, selectedNode, onSelectNode }) {
   const { nodes, edges } = useMemo(
@@ -40,12 +38,6 @@ export function RepoGraphFlow({ graphData, selectedNode, onSelectNode }) {
           >
             <Background color="#d7dee8" gap={22} />
             <Controls showInteractive={false} />
-            <MiniMap
-              pannable
-              zoomable
-              nodeColor={nodeColor}
-              maskColor="rgba(246, 247, 249, 0.72)"
-            />
           </ReactFlow>
         ) : (
           <div className="repo-flow-empty">No dependency graph data yet.</div>

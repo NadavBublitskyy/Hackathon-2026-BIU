@@ -242,11 +242,11 @@ button:disabled {
 }
 
 .workspace-layout {
-  flex: 1;
   display: grid;
   grid-template-columns: minmax(380px, 0.92fr) minmax(480px, 1.08fr);
   gap: 18px;
   padding: 18px;
+  align-items: start;
   min-height: calc(100vh - 72px);
 }
 
@@ -257,7 +257,6 @@ button:disabled {
 
 .chat-panel,
 .repo-graph-panel {
-  height: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -467,10 +466,8 @@ button:disabled {
 }
 
 .graph-workspace {
-  height: 100%;
-  min-height: 0;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
   gap: 12px;
 }
 
@@ -486,18 +483,19 @@ button:disabled {
 
 .graph-canvas {
   flex: 1;
-  min-height: 0;
+  min-height: 420px;
   padding: 10px;
   background: #fbfcfe;
 }
 
 .repo-flow-canvas {
   position: relative;
+  min-height: 700px;
   padding: 0;
 }
 
 .repo-flow-canvas .react-flow {
-  min-height: 420px;
+  min-height: 700px;
   background: #fbfcfe;
 }
 
@@ -507,7 +505,7 @@ button:disabled {
 
 .repo-flow-empty {
   height: 100%;
-  min-height: 420px;
+  min-height: 700px;
   display: grid;
   place-items: center;
   color: var(--text-muted);
