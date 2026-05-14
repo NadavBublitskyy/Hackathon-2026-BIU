@@ -1,0 +1,55 @@
+# This file defines how to run the Brain backend in Docker or Podman Compose.
+
+# Set the Compose project name, defaulting to repo-explorer when no env value is provided.
+name: ${COMPOSE_PROJECT_NAME:-repo-explorer}
+
+# Start the list of Compose services.
+services:
+  # Define the FastAPI backend service for The Brain.
+  backend:
+    # Define how the backend image should be built.
+    build:
+      # Use The Brain folder as the Docker build context.
+      context: ./The Brain
+      # Use the Containerfile inside The Brain as the image recipe.
+      dockerfile: Containerfile
+    # Define environment variables injected into the container.
+    environment:
+      # Pass the app environment into the container.
+      APP_ENV: ${APP_ENV:-development}
+      # Pass the selected LLM provider into the container.
+      LLM_PROVIDER: ${LLM_PROVIDER:-openrouter}
+      # Pass the remote LLM base URL into the container.
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://openrouter.ai/api/v1}
+      # Pass the selected LLM model name into the container.
+      LLM_MODEL_NAME: ${LLM_MODEL_NAME:-openrouter/auto}
+      # Pass a generic LLM API key into the container when it exists.
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      # Pass the OpenRouter API key into the container when it exists.
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      # Pass the frontend origins allowed to call the backend.
+      BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+    # Define host-to-container port mappings.
+    ports:
+      # Expose container port 8000 on the configured host backend port.
+      - "${BACKEND_PORT:-8000}:8000"
+    # Define Docker's readiness check for the backend service.
+    healthcheck:
+      # Define the command Docker runs to check LLM readiness.
+      test:
+        # Run the healthcheck as a command.
+        - CMD
+        # Use Python inside the container for the HTTP check.
+        - python
+        # Tell Python to execute the following inline code.
+        - -c
+        # Call the LLM status endpoint and fail if it is unreachable or not ready.
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/llm/status', timeout=5)"
+      # Run the healthcheck every 20 seconds.
+      interval: 20s
+      # Fail one healthcheck attempt if it takes longer than 5 seconds.
+      timeout: 5s
+      # Mark the service unhealthy after 3 failed healthcheck attempts.
+      retries: 3
+      # Give the service 20 seconds to start before healthcheck failures count.
+      start_period: 20s

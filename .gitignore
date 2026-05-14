@@ -6,6 +6,20 @@ bin-release/
 
 # Other files and folders
 .settings/
+.env
+.env.*
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+
+node_modules/
+dist/
+build/
+data/
 
 # Executables
 *.swf
