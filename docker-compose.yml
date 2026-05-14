@@ -9,10 +9,10 @@ services:
   backend:
     # Define how the backend image should be built.
     build:
-      # Use The Brain folder as the Docker build context.
-      context: ./The Brain
+      # Use the repository root so the backend image can include Memory.
+      context: .
       # Use the Containerfile inside The Brain as the image recipe.
-      dockerfile: Containerfile
+      dockerfile: The Brain/Containerfile
     # Define environment variables injected into the container.
     environment:
       # Pass the app environment into the container.

@@ -19,6 +19,13 @@ export function PromptComposer({ disabled, selectedNode, onAsk }) {
     setPrompt("");
   };
 
+  const handleKeyDown = (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      submitPrompt(event);
+    }
+  };
+
   return (
     <form className="prompt-composer" onSubmit={submitPrompt}>
       {selectedNode ? (
@@ -31,6 +38,7 @@ export function PromptComposer({ disabled, selectedNode, onAsk }) {
       <textarea
         value={prompt}
         onChange={(event) => setPrompt(event.target.value)}
+        onKeyDown={handleKeyDown}
         placeholder="Ask where logic lives, how to add an endpoint, or a general question..."
         rows={4}
         disabled={disabled}

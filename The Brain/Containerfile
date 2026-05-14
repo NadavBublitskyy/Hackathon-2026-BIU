@@ -12,13 +12,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # Copy the Python dependency list into the image.
-COPY requirements.txt ./requirements.txt
+COPY ["The Brain/requirements.txt", "./requirements.txt"]
 
 # Install the Python dependencies inside the image.
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the backend package into the image.
-COPY backend ./backend
+COPY ["The Brain/backend", "./backend"]
+
+# Copy the Memory package used by the Memory API routes.
+COPY ["Memory", "./Memory"]
 
 # Document that the service listens on port 8000.
 EXPOSE 8000
