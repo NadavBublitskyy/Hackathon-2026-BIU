@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { brainService } from "../services/brainService";
+import { classificationService } from "../services/classificationService";
 import { vikiService } from "../services/vikiService";
-import { classifyQuestion, questionCategories } from "../utils/questionClassifier";
+import { questionCategories } from "../utils/questionClassifier";
 
 const createMessage = (role, content, metadata = {}) => ({
   id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -19,14 +20,18 @@ export const useChatController = ({ structureJson, codeChunksJson, selectedNode 
   const canAskRepoQuestions = useMemo(() => Boolean(structureJson && codeChunksJson), [structureJson, codeChunksJson]);
 
   const askQuestion = async (prompt) => {
-    const route = classifyQuestion(prompt, selectedNode);
-    const userMessage = createMessage("user", prompt, { route });
+    let route = null;
 
-    setMessages((currentMessages) => [...currentMessages, userMessage]);
-    setStatus("answering");
+    setStatus("classifying");
     setError("");
 
     try {
+      route = await classificationService.classifyPrompt({ prompt, selectedNode });
+      const userMessage = createMessage("user", prompt, { route });
+
+      setMessages((currentMessages) => [...currentMessages, userMessage]);
+      setStatus("answering");
+
       let answer;
 
       if (route.category === questionCategories.GENERAL) {

@@ -3,6 +3,7 @@ const CODE_SYMBOL_PATTERN = /\b(function|class|method|component|endpoint|route|h
 const REPO_WIDE_PATTERN = /\b(repo|repository|architecture|data flow|dependency|dependencies|all files|codebase|implement|feature|refactor|rewrite|debug|bug|where should|how do i add|how should i)\b/i;
 
 export const questionCategories = {
+  PENDING: "pending",
   GENERAL: "general",
   SPECIFIC_CODE: "specific_code",
   REPO_WIDE: "repo_wide",

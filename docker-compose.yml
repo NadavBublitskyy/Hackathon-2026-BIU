@@ -74,6 +74,8 @@ services:
         VITE_BLUEPRINT_ENDPOINT: ${VITE_BLUEPRINT_ENDPOINT:-/api/blueprint/routed}
         # Configure the Viki semantic retrieval API path.
         VITE_VIKI_CONTEXT_ENDPOINT: ${VITE_VIKI_CONTEXT_ENDPOINT:-/api/memory/retrieve}
+        # Configure the prompt classification API path.
+        VITE_PROMPT_CLASSIFY_ENDPOINT: ${VITE_PROMPT_CLASSIFY_ENDPOINT:-/api/prompt/classify}
     # Define host-to-container port mappings.
     ports:
       # Expose container port 80 on the configured host frontend port.

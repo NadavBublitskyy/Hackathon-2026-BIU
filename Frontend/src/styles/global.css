@@ -402,6 +402,11 @@ button:disabled {
   background: #dbeafe;
 }
 
+.route-badge.pending {
+  color: #4338ca;
+  background: #e0e7ff;
+}
+
 .route-badge.specific_code {
   color: #0f766e;
   background: #ccfbf1;

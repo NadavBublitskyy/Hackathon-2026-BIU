@@ -1,11 +1,11 @@
 import { Send, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { RouteBadge } from "../RouteBadge/RouteBadge";
-import { classifyQuestion } from "../../utils/questionClassifier";
+import { questionCategories } from "../../utils/questionClassifier";
 
 export function PromptComposer({ disabled, selectedNode, onAsk }) {
   const [prompt, setPrompt] = useState("");
-  const route = useMemo(() => classifyQuestion(prompt, selectedNode), [prompt, selectedNode]);
+  const route = prompt.trim() ? { category: questionCategories.PENDING, label: "LLM route" } : null;
   const canSend = prompt.trim() && !disabled;
 
   const submitPrompt = (event) => {
