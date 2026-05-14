@@ -37,6 +37,9 @@ def build_graph(structure: dict) -> dict:
         if file_path is None or file_path not in internal_paths:
             continue
 
+        if graph.has_node(file_path):
+            continue
+
         graph.add_node(
             file_path,
             label=_get_label(file_data, file_path),

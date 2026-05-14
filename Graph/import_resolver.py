@@ -7,7 +7,9 @@ INDEX_FILENAMES = tuple(f"index{extension}" for extension in SUPPORTED_EXTENSION
 
 def normalize_file_path(path: str) -> str:
     """Normalize repo-relative paths for graph IDs and import matching."""
-    return path.replace("\\", "/").lstrip("./")
+    normalized = path.replace("\\", "/").strip()
+    parts = [part for part in normalized.split("/") if part and part != "."]
+    return "/".join(parts)
 
 
 def resolve_import(import_path: str, internal_file_paths: set[str]) -> Optional[str]:
