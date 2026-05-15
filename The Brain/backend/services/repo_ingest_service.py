@@ -7,7 +7,7 @@ from __future__ import annotations
 import asyncio
 # Import logging so non-blocking Chroma startup failures can be diagnosed.
 import logging
-# Import re so imports and definitions can be extracted from source text.
+import os
 import re
 # Import Callable so ingestion can notify the route when chunks are available.
 from collections.abc import Callable
@@ -36,8 +36,14 @@ logger = logging.getLogger(__name__)
 async def ingest_public_repo(github_url: str, on_code_chunks_ready: Callable[[list[dict[str, Any]]], Any] | None = None) -> dict[str, Any]:
     # Parse and validate the incoming GitHub repository URL.
     owner, repo = parse_github_repo_url(github_url)
+    
+    headers = {"Accept": "application/vnd.github+json", "User-Agent": "Repo-Explorer-Hackathon"}
+    github_token = os.getenv("GITHUB_TOKEN")
+    if github_token:
+        headers["Authorization"] = f"Bearer {github_token}"
+
     # Create a short-lived async HTTP client for GitHub public API calls.
-    async with httpx.AsyncClient(timeout=30.0, headers={"Accept": "application/vnd.github+json", "User-Agent": "Repo-Explorer-Hackathon"}) as client:
+    async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
         # Fetch repository metadata to prove the repo exists publicly.
         repo_data = await fetch_github_json(client, f"https://api.github.com/repos/{owner}/{repo}")
         # Reject private repositories because the app intentionally does not ask users for tokens.
