@@ -31,6 +31,12 @@ CONTEXT_HUMAN_PROMPT = """
 {user_query}
 """.strip()
 
+# Keep answer prompts focused without hard-coding a number of files.
+MAX_RELEVANT_CONTEXT_CHARS = 12_000
+MAX_SINGLE_SNIPPET_CHARS = 2_500
+MIN_PROMPT_SNIPPET_SCORE = 0.40
+RELATIVE_PROMPT_SCORE_THRESHOLD = 0.65
+
 
 # Build the OpenAI-compatible message list used by the remote LLM API.
 def build_context_aware_messages(user_query: str, structure_json: Any, relevant_context: Any) -> list[dict[str, str]]:
@@ -183,7 +189,7 @@ def _format_definitions(definitions: Any) -> str:
 # Format relevant_context into path-labeled fenced code snippets.
 def format_relevant_context(relevant_context: Any) -> str:
     # Normalize the relevant context input into a list of snippet dictionaries.
-    snippets = _normalize_snippets(relevant_context)
+    snippets = _select_prompt_snippets(_normalize_snippets(relevant_context))
     # Return a fallback when no snippets were provided.
     if not snippets:
         # Tell the model that no semantic snippets were available.
@@ -197,7 +203,7 @@ def format_relevant_context(relevant_context: Any) -> str:
         # Read the optional function name from the snippet.
         function_name = _first_text_value(snippet, ("function_name", "name", "symbol"))
         # Read the code/content value from the snippet.
-        content = str(snippet.get("content") or snippet.get("code") or snippet.get("text") or "")
+        content = _fit_snippet_content(str(snippet.get("content") or snippet.get("code") or snippet.get("text") or ""))
         # Build the snippet header with a file path and optional function name.
         header = f"### Snippet {index}: {file_path}"
         # Add the function name when present.
@@ -210,6 +216,69 @@ def format_relevant_context(relevant_context: Any) -> str:
         blocks.append(f"{header}\n```{language}\n{_escape_code_fence(content)}\n```")
     # Join all snippet blocks with blank lines.
     return "\n\n".join(blocks)
+
+
+# Select snippets for the final LLM prompt by score and character budget, not by file count.
+def _select_prompt_snippets(snippets: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    # Return quickly when no snippets were supplied.
+    if not snippets:
+        return []
+
+    # Sort scored snippets by relevance while preserving original order for unscored snippets.
+    indexed_snippets = list(enumerate(snippets))
+    scored_values = [_parse_score(snippet.get("score")) for _, snippet in indexed_snippets]
+    usable_scores = [score for score in scored_values if score is not None]
+
+    if usable_scores:
+        best_score = max(usable_scores)
+        minimum_score = max(MIN_PROMPT_SNIPPET_SCORE, best_score * RELATIVE_PROMPT_SCORE_THRESHOLD)
+        indexed_snippets = [
+            (index, snippet)
+            for index, snippet in indexed_snippets
+            if (score := _parse_score(snippet.get("score"))) is not None and score >= minimum_score
+        ]
+        indexed_snippets.sort(key=lambda item: (_parse_score(item[1].get("score")) or 0.0, -item[0]), reverse=True)
+
+    selected: list[dict[str, Any]] = []
+    used_chars = 0
+
+    for _, snippet in indexed_snippets:
+        content = str(snippet.get("content") or snippet.get("code") or snippet.get("text") or "")
+        snippet_cost = min(len(content), MAX_SINGLE_SNIPPET_CHARS)
+
+        if selected and used_chars + snippet_cost > MAX_RELEVANT_CONTEXT_CHARS:
+            continue
+
+        selected.append(snippet)
+        used_chars += snippet_cost
+
+        if used_chars >= MAX_RELEVANT_CONTEXT_CHARS:
+            break
+
+    return selected
+
+
+# Trim a single snippet so one large file cannot dominate the prompt budget.
+def _fit_snippet_content(content: str) -> str:
+    # Keep short snippets unchanged.
+    cleaned = content.strip()
+    if len(cleaned) <= MAX_SINGLE_SNIPPET_CHARS:
+        return cleaned
+
+    # Return a clear truncation marker after the retained source prefix.
+    return f"{cleaned[:MAX_SINGLE_SNIPPET_CHARS].rstrip()}\n... snippet truncated for prompt budget ..."
+
+
+# Parse optional relevance scores.
+def _parse_score(score: Any) -> float | None:
+    # Missing scores should not affect score-threshold filtering.
+    if score is None:
+        return None
+
+    try:
+        return float(score)
+    except (TypeError, ValueError):
+        return None
 
 
 # Normalize relevant_context into a list of snippet dictionaries.

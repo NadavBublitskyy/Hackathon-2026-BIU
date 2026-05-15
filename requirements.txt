@@ -4,3 +4,9 @@ fastapi
 uvicorn[standard]
 PyGithub==2.5.0
 python-dotenv==1.0.1
+# tree-sitter MUST stay at 0.21.3 — tree-sitter-languages 1.10.2 is compiled
+# against this ABI. 0.22+ changes Parser() and 0.25+ changes Language() in
+# ways that break the get_language/get_parser helpers in tree-sitter-languages.
+tree-sitter==0.21.3
+tree-sitter-languages==1.10.2
+requests>=2.28.0

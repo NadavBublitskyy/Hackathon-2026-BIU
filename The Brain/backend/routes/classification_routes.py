@@ -21,6 +21,6 @@ router = APIRouter()
 @router.post("/api/prompt/classify")
 async def classify_user_prompt(request: PromptClassifyRequest) -> dict[str, Any]:
     # Classify the prompt with the requested cheap classifier model.
-    result = await classify_prompt(request.prompt, request.selected_file_path, request.classifier_model_name)
+    result = await classify_prompt(request.prompt, request.selected_file_path, request.classifier_model_name, request.retrieved_context)
     # Return a JSON-serializable dictionary.
     return asdict(result)

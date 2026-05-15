@@ -24,6 +24,8 @@ export const normalizeRelevantContext = (payload) => {
     function_name: item.function_name || item.name || item.symbol || `snippet_${index + 1}`,
     content: item.content || item.code || item.text || "",
     score: item.score,
+    start_line: item.start_line,
+    end_line: item.end_line,
   }));
 };
 

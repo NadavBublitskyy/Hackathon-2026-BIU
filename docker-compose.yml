@@ -33,6 +33,12 @@ services:
     ports:
       # Expose container port 8000 on the configured host backend port.
       - "${BACKEND_PORT:-8000}:8000"
+    # Persist ChromaDB data and the downloaded embedding model across rebuilds/recreates.
+    volumes:
+      # Keep the indexed vectors between backend container recreations.
+      - chroma-db:/app/Memory/chroma_db
+      # Keep Chroma's ONNX embedding model cache so it is not downloaded every time.
+      - chroma-cache:/root/.cache/chroma
     # Define Docker's readiness check for the backend service.
     healthcheck:
       # Define the command Docker runs to check LLM readiness.
@@ -100,3 +106,10 @@ services:
       retries: 3
       # Give the service 10 seconds to start before healthcheck failures count.
       start_period: 10s
+
+# Define persistent local Docker volumes used by the backend.
+volumes:
+  # Stores ChromaDB collections.
+  chroma-db:
+  # Stores Chroma's downloaded embedding model cache.
+  chroma-cache:

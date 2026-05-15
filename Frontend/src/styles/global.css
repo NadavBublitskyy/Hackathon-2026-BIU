@@ -328,10 +328,12 @@ button:disabled {
 
 .chat-message {
   max-width: 92%;
+  min-width: 0;
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: #f9fbfd;
+  overflow: hidden;
 }
 
 .chat-message.user {
@@ -357,9 +359,44 @@ button:disabled {
 }
 
 .message-body {
+  max-width: 100%;
+  min-width: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   line-height: 1.55;
+}
+
+.message-body > :first-child {
+  margin-top: 0;
+}
+
+.message-body > :last-child {
+  margin-bottom: 0;
+}
+
+.message-body pre {
+  max-width: 100%;
+  margin: 12px 0;
+  padding: 12px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f3f6fa;
+  white-space: pre;
+}
+
+.message-body pre code {
+  display: block;
+  min-width: max-content;
+  white-space: pre;
+}
+
+.message-body :not(pre) > code {
+  padding: 2px 5px;
+  border-radius: 6px;
+  background: #eef2f6;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .message-meta {
