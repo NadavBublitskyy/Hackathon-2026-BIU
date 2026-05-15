@@ -481,6 +481,16 @@ button:disabled {
   color: var(--amber);
 }
 
+.graph-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.graph-expand-button {
+  white-space: nowrap;
+}
+
 .graph-canvas {
   flex: 1;
   min-height: 420px;
@@ -490,8 +500,8 @@ button:disabled {
 
 .repo-flow-canvas {
   position: relative;
-  height: min(72vh, 860px);
-  min-height: 620px;
+  height: min(70vh, 780px);
+  min-height: 560px;
   padding: 0;
   overflow: auto;
 }
@@ -517,13 +527,13 @@ button:disabled {
   width: 100%;
   height: 100%;
   display: grid;
-  grid-template-columns: 6px minmax(0, 1fr);
+  grid-template-columns: 5px minmax(0, 1fr);
   align-items: stretch;
   background: transparent;
 }
 
 .repo-flow-node-accent {
-  width: 6px;
+  width: 5px;
 }
 
 .repo-flow-node-copy {
@@ -531,8 +541,8 @@ button:disabled {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 4px;
-  padding: 10px 12px;
+  gap: 3px;
+  padding: 8px 10px;
 }
 
 .repo-flow-node-copy span,
@@ -546,14 +556,14 @@ button:disabled {
 
 .repo-flow-node-copy span {
   color: #18212f;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.2;
   font-weight: 800;
 }
 
 .repo-flow-node-copy small {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 10px;
   line-height: 1.2;
   font-weight: 700;
 }
@@ -574,13 +584,115 @@ button:disabled {
   stroke-linecap: round;
 }
 
+.repo-flow-canvas .react-flow__edge {
+  opacity: 0.74;
+}
+
 .repo-flow-canvas .react-flow__controls {
   box-shadow: 0 8px 18px rgba(24, 33, 47, 0.10);
 }
 
+.repo-flow-canvas .react-flow__minimap {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 8px 18px rgba(24, 33, 47, 0.08);
+}
+
+.repo-flow-hint {
+  position: sticky;
+  left: 12px;
+  bottom: 12px;
+  width: fit-content;
+  max-width: calc(100% - 24px);
+  margin: -38px 0 12px 12px;
+  padding: 7px 10px;
+  border: 1px solid rgba(215, 222, 232, 0.9);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 8px 18px rgba(24, 33, 47, 0.08);
+  pointer-events: none;
+}
+
+.graph-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.46);
+  backdrop-filter: blur(5px);
+}
+
+.graph-modal-panel {
+  width: max(85vw, min(94vw, 1480px));
+  max-width: 94vw;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.26);
+  overflow: hidden;
+}
+
+.graph-modal-header {
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.graph-modal-header h2,
+.graph-modal-header p {
+  margin: 0;
+}
+
+.graph-modal-header h2 {
+  font-size: 17px;
+}
+
+.graph-modal-header p {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.graph-modal-header button {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: #344256;
+  background: #eef2f6;
+}
+
+.graph-modal-canvas {
+  width: 100%;
+  height: 80vh;
+  min-height: 80vh;
+  overflow: auto;
+  background: #fbfcfe;
+}
+
+.repo-flow-stage.expanded {
+  width: 100%;
+  height: 100%;
+}
+
 .repo-flow-empty {
   height: 100%;
-  min-height: 700px;
+  min-height: 560px;
   display: grid;
   place-items: center;
   color: var(--text-muted);
