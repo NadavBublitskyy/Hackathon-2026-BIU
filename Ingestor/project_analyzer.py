@@ -1,7 +1,7 @@
 import os
 import re
 import json
-from code_chunker import CodeChunker
+from Ingestor.code_chunker import CodeChunker
 
 # This module defines the ProjectAnalyzer class, which takes a list of files from GitHubIngestor,
 # builds a hierarchical structure, extracts imports, tags metadata, and saves the overall structure to a JSON file.

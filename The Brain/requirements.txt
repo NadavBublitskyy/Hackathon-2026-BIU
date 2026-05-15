@@ -18,3 +18,5 @@ PyGithub==2.5.0
 python-dotenv==1.0.1
 # NetworkX powers the Milestone 3 graph builder.
 networkx==3.4.2
+# tree_sitter_languages provides parsers for the code chunker.
+tree_sitter_languages==1.10.2
