@@ -71,6 +71,7 @@ def test_post_node_details_returns_full_metadata():
                             "functions": ["verify_token"],
                             "variables": ["MAX_RETRIES"],
                         },
+                        "imports": ["src/utils/security.py"],
                     }
                 ]
             },
@@ -81,13 +82,16 @@ def test_post_node_details_returns_full_metadata():
     assert response.status_code == 200
     assert response.json() == {
         "id": "src/auth/login.py",
+        "path": "src/auth/login.py",
         "label": "login.py",
-        "group": "auth",
+        "name": "login.py",
+        "group": "src",
         "definitions": {
             "classes": ["Authenticator"],
             "functions": ["verify_token"],
             "variables": ["MAX_RETRIES"],
         },
+        "imports": ["src/utils/security.py"],
     }
 
 

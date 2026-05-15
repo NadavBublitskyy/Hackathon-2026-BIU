@@ -23,7 +23,7 @@ def open_streaming_chat(prompt: str):
         return urllib.request.urlopen(request, timeout=60)
     except urllib.error.URLError as exc:
         raise unittest.SkipTest(
-            "The Brain backend must be running on http://127.0.0.1:8080 for streaming endpoint tests."
+            "The Brain backend must be running on http://127.0.0.1:8000 for streaming endpoint tests."
         ) from exc
 
 

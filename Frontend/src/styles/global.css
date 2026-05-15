@@ -745,44 +745,6 @@ button:disabled {
   font-size: 14px;
 }
 
-.graph-canvas svg {
-  width: 100%;
-  height: 100%;
-  min-height: 420px;
-}
-
-.graph-edge {
-  stroke: #9aa8ba;
-  stroke-width: 1.4;
-  opacity: 0.7;
-}
-
-.graph-node {
-  cursor: pointer;
-  outline: none;
-}
-
-.graph-node circle {
-  stroke: #ffffff;
-  stroke-width: 3;
-  filter: drop-shadow(0 8px 12px rgba(24, 33, 47, 0.18));
-}
-
-.graph-node.selected circle {
-  stroke: #111827;
-  stroke-width: 4;
-}
-
-.graph-node text {
-  fill: #263244;
-  font-size: 12px;
-  font-weight: 800;
-  paint-order: stroke;
-  stroke: #ffffff;
-  stroke-width: 4px;
-  stroke-linejoin: round;
-}
-
 .node-details {
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -836,6 +798,10 @@ button:disabled {
   color: var(--text-muted);
   overflow-wrap: anywhere;
   font-size: 13px;
+}
+
+.node-details-error {
+  color: var(--red);
 }
 
 .definition-row {

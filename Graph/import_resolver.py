@@ -1,7 +1,7 @@
 from typing import Optional
 
 
-SUPPORTED_EXTENSIONS = (".py", ".js", ".ts", ".tsx", ".java")
+SUPPORTED_EXTENSIONS = (".py", ".js", ".jsx", ".ts", ".tsx", ".java")
 INDEX_FILENAMES = tuple(f"index{extension}" for extension in SUPPORTED_EXTENSIONS)
 
 

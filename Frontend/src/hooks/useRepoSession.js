@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { githubService } from "../services/githubService";
+import { graphService } from "../services/graphService";
 import { ingestionService } from "../services/ingestionService";
 
 export const useRepoSession = () => {
@@ -53,6 +54,43 @@ export const useRepoSession = () => {
     }
   };
 
+  const selectGraphNode = async (node) => {
+    if (!node) {
+      setSelectedNode(null);
+      return;
+    }
+
+    const basicNode = { ...node, isLoadingDetails: Boolean(structureJson) };
+    setSelectedNode(basicNode);
+
+    if (!structureJson || !node.id) {
+      return;
+    }
+
+    try {
+      const details = await graphService.getNodeDetails({ structureJson, nodeId: node.id });
+      setSelectedNode((currentNode) => {
+        if (currentNode?.id !== node.id) {
+          return currentNode;
+        }
+
+        return { ...currentNode, ...details, isLoadingDetails: false };
+      });
+    } catch (caughtError) {
+      setSelectedNode((currentNode) => {
+        if (currentNode?.id !== node.id) {
+          return currentNode;
+        }
+
+        return {
+          ...currentNode,
+          isLoadingDetails: false,
+          detailError: caughtError.message || "Could not load file details.",
+        };
+      });
+    }
+  };
+
   return {
     repoUrl,
     repoMeta,
@@ -64,7 +102,7 @@ export const useRepoSession = () => {
     error,
     isReady,
     setRepoUrl,
-    setSelectedNode,
+    setSelectedNode: selectGraphNode,
     ingestRepo,
     resetRepo,
   };
