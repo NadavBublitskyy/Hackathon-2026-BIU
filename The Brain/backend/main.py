@@ -18,8 +18,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.config import get_settings
 # Import LLM lifecycle helpers from the dedicated client module.
 from backend.llm_client import close_llm_connection, setup_llm_connection
-# Import route modules so this file only registers routers.
-from backend.routes import blueprint_routes, chat_routes, classification_routes, repo_routes, status_routes
 
 # Resolve likely project roots for local and container runs.
 project_root_candidates = [
@@ -27,10 +25,13 @@ project_root_candidates = [
     Path(__file__).resolve().parents[1],
 ]
 
-# Add roots that contain the Memory package to Python's import path.
+# Add roots that contain milestone packages to Python's import path before route imports.
 for project_root in project_root_candidates:
     if (project_root / "Memory").exists() and str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
+
+# Import route modules so this file only registers routers.
+from backend.routes import blueprint_routes, chat_routes, classification_routes, repo_routes, status_routes
 
 # Import the Memory router after the project root is available on sys.path.
 from Memory.api import router as memory_router

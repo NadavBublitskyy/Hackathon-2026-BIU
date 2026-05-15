@@ -23,6 +23,10 @@ COPY ["The Brain/backend", "./backend"]
 # Copy the Memory package used by the Memory API routes.
 COPY ["Memory", "./Memory"]
 
+# Copy milestone packages used by the backend orchestration layer.
+COPY ["Ingestor", "./Ingestor"]
+COPY ["Graph", "./Graph"]
+
 # Document that the service listens on port 8000.
 EXPOSE 8000
 
