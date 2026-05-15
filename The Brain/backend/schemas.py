@@ -53,8 +53,8 @@ class MemoryRetrieveRequest(BaseModel):
     structure_json: dict | None = Field(default=None)
     # Store the code chunks JSON produced by /api/ingest.
     code_chunks_json: list[dict] = Field(default_factory=list)
-    # Store how many snippets should be returned.
-    top_k: int = Field(default=5, ge=1, le=10)
+    # Store an optional snippet limit. None means return all positively scored snippets.
+    top_k: int | None = Field(default=None, ge=1)
 
 
 # Define the request body accepted by /api/prompt/classify.

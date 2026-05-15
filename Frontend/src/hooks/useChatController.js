@@ -29,13 +29,24 @@ export const useChatController = ({ structureJson, codeChunksJson, selectedNode 
       route = await classificationService.classifyPrompt({ prompt, selectedNode });
       const userMessage = createMessage("user", prompt, { route });
 
-      setMessages((currentMessages) => [...currentMessages, userMessage]);
+      const assistantMessageId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      setMessages((currentMessages) => [
+        ...currentMessages,
+        userMessage,
+        {
+          id: assistantMessageId,
+          role: "assistant",
+          content: "",
+          metadata: { route },
+          createdAt: new Date().toISOString(),
+        },
+      ]);
       setStatus("answering");
 
-      let answer;
+      let streamIterator;
 
       if (route.category === questionCategories.GENERAL) {
-        answer = await brainService.askGeneral(prompt);
+        streamIterator = brainService.streamGeneral(prompt);
       } else if (route.category === questionCategories.SPECIFIC_CODE) {
         if (!canAskRepoQuestions) {
           throw new Error("Ingest a repository before asking code-specific questions.");
@@ -48,7 +59,7 @@ export const useChatController = ({ structureJson, codeChunksJson, selectedNode 
           codeChunksJson,
         });
 
-        answer = await brainService.askWithContext({
+        streamIterator = brainService.streamWithContext({
           prompt,
           structureJson,
           relevantContextJson,
@@ -58,32 +69,72 @@ export const useChatController = ({ structureJson, codeChunksJson, selectedNode 
           throw new Error("Ingest a repository before asking repo-wide questions.");
         }
 
-        answer = await brainService.askWithContext({
+        streamIterator = brainService.streamWithContext({
           prompt,
           structureJson,
           relevantContextJson: codeChunksJson,
         });
       }
 
-      const assistantMessage = createMessage("assistant", answer.response || "No answer returned.", {
-        route,
-        model: answer.answered_by_model || answer.selected_model,
-        pathsVerified: answer.paths_verified,
-        fallbackUsed: answer.fallback_used,
-      });
+      for await (const { event, data } of streamIterator) {
+        if (event === "start") {
+          setMessages((msgs) =>
+            msgs.map((msg) =>
+              msg.id === assistantMessageId
+                ? {
+                    ...msg,
+                    metadata: {
+                      ...msg.metadata,
+                      model: data.selected_model || "openrouter/auto",
+                      pathsVerified: data.paths_verified,
+                      fallbackUsed: data.fallback_used,
+                    },
+                  }
+                : msg
+            )
+          );
+        } else if (event === "token") {
+          setMessages((msgs) =>
+            msgs.map((msg) =>
+              msg.id === assistantMessageId
+                ? { ...msg, content: msg.content + data.token }
+                : msg
+            )
+          );
+        } else if (event === "error") {
+          throw new Error(data.detail || "Streaming error occurred.");
+        } else if (event === "done") {
+          break;
+        }
+      }
 
-      setMessages((currentMessages) => [...currentMessages, assistantMessage]);
       setStatus("idle");
     } catch (caughtError) {
       setError(caughtError.message || "Failed to ask the chatbot backend.");
       setStatus("error");
-      setMessages((currentMessages) => [
-        ...currentMessages,
-        createMessage("assistant", caughtError.message || "Failed to ask the chatbot backend.", {
-          route,
-          isError: true,
-        }),
-      ]);
+      
+      setMessages((currentMessages) => {
+        // If the error happened during streaming, the last message is the assistant message
+        const isAssistantMessageEmpty = currentMessages.length > 0 && 
+                                        currentMessages[currentMessages.length - 1].role === "assistant" &&
+                                        !currentMessages[currentMessages.length - 1].content;
+        
+        if (isAssistantMessageEmpty) {
+           return currentMessages.map((msg, index) => 
+             index === currentMessages.length - 1 
+               ? { ...msg, content: caughtError.message || "Failed to ask the chatbot backend.", metadata: { ...msg.metadata, isError: true } }
+               : msg
+           );
+        }
+
+        return [
+          ...currentMessages,
+          createMessage("assistant", caughtError.message || "Failed to ask the chatbot backend.", {
+            route,
+            isError: true,
+          }),
+        ];
+      });
     }
   };
 

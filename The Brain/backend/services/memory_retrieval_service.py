@@ -10,7 +10,7 @@ from typing import Any
 
 
 # Retrieve relevant code snippets from code_chunks_json without an external vector store.
-def retrieve_relevant_context(query: str, code_chunks_json: list[dict[str, Any]], selected_file_path: str | None = None, top_k: int = 5) -> list[dict[str, Any]]:
+def retrieve_relevant_context(query: str, code_chunks_json: list[dict[str, Any]], selected_file_path: str | None = None, top_k: int | None = None) -> list[dict[str, Any]]:
     # Reject empty queries because retrieval needs text.
     if not query.strip():
         # Return no context for empty prompts.
@@ -29,8 +29,10 @@ def retrieve_relevant_context(query: str, code_chunks_json: list[dict[str, Any]]
             scored_chunks.append((score, chunk))
     # Sort by descending relevance.
     scored_chunks.sort(key=lambda item: item[0], reverse=True)
-    # Convert top chunks into Brain-compatible relevant_context objects.
-    return [to_relevant_context(chunk, score) for score, chunk in scored_chunks[:top_k]]
+    # Keep every relevant chunk unless the caller explicitly provides a limit.
+    selected_chunks = scored_chunks[:top_k] if top_k is not None else scored_chunks
+    # Convert selected chunks into Brain-compatible relevant_context objects.
+    return [to_relevant_context(chunk, score) for score, chunk in selected_chunks]
 
 
 # Score one chunk using simple lexical overlap and selected-file boosting.
