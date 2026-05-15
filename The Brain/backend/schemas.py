@@ -53,8 +53,8 @@ class MemoryRetrieveRequest(BaseModel):
     structure_json: dict | None = Field(default=None)
     # Store the code chunks JSON produced by /api/ingest.
     code_chunks_json: list[dict] = Field(default_factory=list)
-    # Store how many snippets should be returned.
-    top_k: int = Field(default=5, ge=1, le=10)
+    # Store an optional snippet limit. None means return all positively scored snippets.
+    top_k: int | None = Field(default=None, ge=1)
 
 
 # Define the request body accepted by /api/prompt/classify.
@@ -63,5 +63,7 @@ class PromptClassifyRequest(BaseModel):
     prompt: str = Field(min_length=1)
     # Store an optional selected file path from the graph.
     selected_file_path: str | None = Field(default=None)
+    # Store lightweight Memory candidates so classification can be biased by repo evidence.
+    retrieved_context: list[dict] = Field(default_factory=list)
     # Store the cheap classifier model used for the category decision.
     classifier_model_name: str = Field(default=DEFAULT_CLASSIFIER_MODEL_NAME, min_length=1)

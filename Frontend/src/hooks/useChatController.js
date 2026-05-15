@@ -21,34 +21,50 @@ export const useChatController = ({ structureJson, codeChunksJson, selectedNode 
 
   const askQuestion = async (prompt) => {
     let route = null;
+    let assistantMessageId = null;
 
     setStatus("classifying");
     setError("");
 
     try {
-      route = await classificationService.classifyPrompt({ prompt, selectedNode });
-      const userMessage = createMessage("user", prompt, { route });
+      let relevantContextJson = [];
 
-      setMessages((currentMessages) => [...currentMessages, userMessage]);
-      setStatus("answering");
-
-      let answer;
-
-      if (route.category === questionCategories.GENERAL) {
-        answer = await brainService.askGeneral(prompt);
-      } else if (route.category === questionCategories.SPECIFIC_CODE) {
-        if (!canAskRepoQuestions) {
-          throw new Error("Ingest a repository before asking code-specific questions.");
-        }
-
-        const relevantContextJson = await vikiService.getRelevantContext({
+      if (canAskRepoQuestions) {
+        relevantContextJson = await vikiService.getRelevantContext({
           prompt,
           selectedFile: selectedNode,
           structureJson,
           codeChunksJson,
         });
+      }
 
-        answer = await brainService.askWithContext({
+      route = await classificationService.classifyPrompt({ prompt, selectedNode, retrievedContextJson: relevantContextJson });
+      const userMessage = createMessage("user", prompt, { route });
+      assistantMessageId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+      setMessages((currentMessages) => [
+        ...currentMessages,
+        userMessage,
+        {
+          id: assistantMessageId,
+          role: "assistant",
+          content: "",
+          metadata: { route },
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+      setStatus("answering");
+
+      let streamIterator;
+
+      if (route.category === questionCategories.GENERAL) {
+        streamIterator = brainService.streamGeneral(prompt);
+      } else if (route.category === questionCategories.SPECIFIC_CODE) {
+        if (!canAskRepoQuestions) {
+          throw new Error("Ingest a repository before asking code-specific questions.");
+        }
+
+        streamIterator = brainService.streamWithContext({
           prompt,
           structureJson,
           relevantContextJson,
@@ -58,32 +74,73 @@ export const useChatController = ({ structureJson, codeChunksJson, selectedNode 
           throw new Error("Ingest a repository before asking repo-wide questions.");
         }
 
-        answer = await brainService.askWithContext({
+        streamIterator = brainService.streamWithContext({
           prompt,
           structureJson,
-          relevantContextJson: codeChunksJson,
+          relevantContextJson,
         });
       }
 
-      const assistantMessage = createMessage("assistant", answer.response || "No answer returned.", {
-        route,
-        model: answer.answered_by_model || answer.selected_model,
-        pathsVerified: answer.paths_verified,
-        fallbackUsed: answer.fallback_used,
-      });
+      for await (const { event, data } of streamIterator) {
+        if (event === "start") {
+          setMessages((currentMessages) =>
+            currentMessages.map((message) =>
+              message.id === assistantMessageId
+                ? {
+                    ...message,
+                    metadata: {
+                      ...message.metadata,
+                      model: data.answered_by_model || data.selected_model,
+                      pathsVerified: data.paths_verified,
+                      fallbackUsed: data.fallback_used,
+                    },
+                  }
+                : message
+            )
+          );
+        } else if (event === "token") {
+          setMessages((currentMessages) =>
+            currentMessages.map((message) =>
+              message.id === assistantMessageId ? { ...message, content: message.content + data.token } : message
+            )
+          );
+        } else if (event === "error") {
+          throw new Error(data.detail || "Streaming error occurred.");
+        } else if (event === "done") {
+          break;
+        }
+      }
 
-      setMessages((currentMessages) => [...currentMessages, assistantMessage]);
+      setMessages((currentMessages) =>
+        currentMessages.map((message) =>
+          message.id === assistantMessageId && !message.content ? { ...message, content: "No answer returned." } : message
+        )
+      );
       setStatus("idle");
     } catch (caughtError) {
       setError(caughtError.message || "Failed to ask the chatbot backend.");
       setStatus("error");
-      setMessages((currentMessages) => [
-        ...currentMessages,
-        createMessage("assistant", caughtError.message || "Failed to ask the chatbot backend.", {
-          route,
-          isError: true,
-        }),
-      ]);
+      setMessages((currentMessages) => {
+        if (assistantMessageId && currentMessages.some((message) => message.id === assistantMessageId)) {
+          return currentMessages.map((message) =>
+            message.id === assistantMessageId
+              ? {
+                  ...message,
+                  content: message.content || caughtError.message || "Failed to ask the chatbot backend.",
+                  metadata: { ...message.metadata, isError: true },
+                }
+              : message
+          );
+        }
+
+        return [
+          ...currentMessages,
+          createMessage("assistant", caughtError.message || "Failed to ask the chatbot backend.", {
+            route,
+            isError: true,
+          }),
+        ];
+      });
     }
   };
 

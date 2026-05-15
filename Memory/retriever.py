@@ -5,6 +5,39 @@ DEFAULT_PERSIST_DIRECTORY = "Memory/chroma_db"
 DEFAULT_COLLECTION_NAME = "code_chunks"
 
 
+def get_collection_state(
+    collection_name: str = DEFAULT_COLLECTION_NAME,
+    persist_directory: str = DEFAULT_PERSIST_DIRECTORY,
+) -> dict:
+    """
+    Returns collection metadata without running an embedding query.
+    """
+
+    client = chromadb.PersistentClient(path=persist_directory)
+
+    try:
+        collection = client.get_collection(name=collection_name)
+    except Exception as error:
+        if error.__class__.__name__ in {"InvalidCollectionException", "NotFoundError"}:
+            return {
+                "exists": False,
+                "count": 0,
+                "metadata": {},
+                "chunks_signature": None,
+            }
+
+        raise
+
+    metadata = collection.metadata or {}
+
+    return {
+        "exists": True,
+        "count": collection.count(),
+        "metadata": metadata,
+        "chunks_signature": metadata.get("chunks_signature"),
+    }
+
+
 def distance_to_score(distance: float) -> float:
     """
     Converts a ChromaDB distance into a relevance score.

@@ -1,5 +1,5 @@
 import { buildBackendUrl, endpoints } from "../config/endpoints";
-import { requestJson } from "./apiClient";
+import { requestJson, streamSse } from "./apiClient";
 import { makeJsonFile } from "../utils/normalizers";
 
 const defaultRoutingFields = {
@@ -33,8 +33,25 @@ export const brainService = {
     });
   },
 
+  streamGeneral: async function* (prompt) {
+    yield* streamSse(buildBackendUrl(`${endpoints.generalChat}/stream`), {
+      method: "POST",
+      body: JSON.stringify({
+        prompt,
+        ...defaultRoutingFields,
+      }),
+    });
+  },
+
   askWithContext: async ({ prompt, structureJson, relevantContextJson }) => {
     return requestJson(buildBackendUrl(endpoints.blueprint), {
+      method: "POST",
+      body: buildBlueprintFormData({ prompt, structureJson, relevantContextJson }),
+    });
+  },
+
+  streamWithContext: async function* ({ prompt, structureJson, relevantContextJson }) {
+    yield* streamSse(buildBackendUrl(`${endpoints.blueprint}/stream`), {
       method: "POST",
       body: buildBlueprintFormData({ prompt, structureJson, relevantContextJson }),
     });
