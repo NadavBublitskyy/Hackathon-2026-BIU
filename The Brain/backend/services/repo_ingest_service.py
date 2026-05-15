@@ -5,8 +5,12 @@ from __future__ import annotations
 
 # Import asyncio so file-content downloads can run concurrently.
 import asyncio
+# Import logging so non-blocking Chroma startup failures can be diagnosed.
+import logging
 # Import re so imports and definitions can be extracted from source text.
 import re
+# Import Callable so ingestion can notify the route when chunks are available.
+from collections.abc import Callable
 # Import PurePosixPath so GitHub paths are handled consistently.
 from pathlib import PurePosixPath
 # Import Any so provider JSON can be typed flexibly.
@@ -25,10 +29,11 @@ IGNORED_PATH_PARTS = {".git", "node_modules", "venv", ".venv", "__pycache__", "d
 MAX_FILE_BYTES = 120_000
 # Define a conservative total file cap to avoid exhausting GitHub unauthenticated limits.
 MAX_FILES = 160
-
+# Create a logger for ingestion diagnostics.
+logger = logging.getLogger(__name__)
 
 # Ingest a public GitHub repository into structure, chunks, and graph dictionaries.
-async def ingest_public_repo(github_url: str) -> dict[str, Any]:
+async def ingest_public_repo(github_url: str, on_code_chunks_ready: Callable[[list[dict[str, Any]]], Any] | None = None) -> dict[str, Any]:
     # Parse and validate the incoming GitHub repository URL.
     owner, repo = parse_github_repo_url(github_url)
     # Create a short-lived async HTTP client for GitHub public API calls.
@@ -47,10 +52,16 @@ async def ingest_public_repo(github_url: str) -> dict[str, Any]:
         file_items = select_code_files(tree_data.get("tree", []))[:MAX_FILES]
         # Download selected file contents from raw.githubusercontent.com.
         contents = await fetch_file_contents(client, owner, repo, default_branch, file_items)
-    # Build Milestone 1 structure.json from downloaded file contents.
-    structure_json = build_structure_json(repo, file_items, contents)
     # Build Milestone 1 code_chunks.json from downloaded file contents.
     code_chunks_json = build_code_chunks_json(contents)
+    # Start vector indexing as soon as chunks exist; structure/graph building can continue.
+    if on_code_chunks_ready is not None:
+        try:
+            on_code_chunks_ready(code_chunks_json)
+        except Exception:
+            logger.exception("Failed to schedule ChromaDB indexing.")
+    # Build Milestone 1 structure.json from downloaded file contents.
+    structure_json = build_structure_json(repo, file_items, contents)
     # Build graph data for the frontend visualization.
     graph_data = build_graph_data(structure_json)
     # Return the exact data the frontend flow needs.
@@ -244,7 +255,7 @@ def extract_definitions(file_path: str, content: str) -> dict[str, list[str]]:
     # Prepare definition buckets.
     definitions = {"classes": [], "functions": [], "variables": []}
     # Extract class declarations.
-    class_patterns = [r"^\s*class\s+([A-Za-z_][A-Za-z0-9_]*)", r"^\s*export\s+class\s+([A-Za-z_][A-Za-z0-9_]*)"]
+    class_patterns = [r"^\s*(?:public\s+|private\s+|protected\s+|abstract\s+|final\s+)*class\s+([A-Za-z_][A-Za-z0-9_]*)", r"^\s*export\s+class\s+([A-Za-z_][A-Za-z0-9_]*)"]
     # Extract function declarations across common languages.
     function_patterns = [r"^\s*def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(", r"^\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(", r"^\s*(?:const|let|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:async\s*)?\(", r"^\s*(?:public|private|protected)?\s*(?:static\s+)?[A-Za-z0-9_<>\[\]]+\s+([A-Za-z_][A-Za-z0-9_]*)\s*\("]
     # Extract obvious constants.
@@ -302,7 +313,16 @@ def extract_chunks(file_path: str, content: str) -> list[dict[str, Any]]:
 # Find class and function symbols with line numbers.
 def find_symbols(content: str) -> list[dict[str, Any]]:
     # Prepare symbol patterns with their chunk types.
-    patterns = [(r"^\s*class\s+([A-Za-z_][A-Za-z0-9_]*)", "class"), (r"^\s*def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(", "function"), (r"^\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(", "function"), (r"^\s*(?:const|let|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:async\s*)?\(", "function")]
+    patterns = [
+        (r"^\s*(?:public\s+|private\s+|protected\s+|abstract\s+|final\s+)*class\s+([A-Za-z_][A-Za-z0-9_]*)", "class"),
+        (r"^\s*def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(", "function"),
+        (r"^\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(", "function"),
+        (r"^\s*(?:const|let|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:async\s*)?\(", "function"),
+        (
+            r"^\s*(?:public|private|protected)?\s*(?:static\s+|final\s+|synchronized\s+|abstract\s+)*[A-Za-z_][A-Za-z0-9_<>\[\], ?]*\s+([A-Za-z_][A-Za-z0-9_]*)\s*\([^;]*\)\s*(?:throws\s+[A-Za-z0-9_.,\s]+)?\{",
+            "function",
+        ),
+    ]
     # Prepare collected symbols.
     symbols = []
     # Run each pattern against the content.

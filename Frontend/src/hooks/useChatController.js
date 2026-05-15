@@ -21,15 +21,27 @@ export const useChatController = ({ structureJson, codeChunksJson, selectedNode 
 
   const askQuestion = async (prompt) => {
     let route = null;
+    let assistantMessageId = null;
 
     setStatus("classifying");
     setError("");
 
     try {
-      route = await classificationService.classifyPrompt({ prompt, selectedNode });
-      const userMessage = createMessage("user", prompt, { route });
+      let relevantContextJson = [];
 
-      const assistantMessageId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      if (canAskRepoQuestions) {
+        relevantContextJson = await vikiService.getRelevantContext({
+          prompt,
+          selectedFile: selectedNode,
+          structureJson,
+          codeChunksJson,
+        });
+      }
+
+      route = await classificationService.classifyPrompt({ prompt, selectedNode, retrievedContextJson: relevantContextJson });
+      const userMessage = createMessage("user", prompt, { route });
+      assistantMessageId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
       setMessages((currentMessages) => [
         ...currentMessages,
         userMessage,
@@ -52,13 +64,6 @@ export const useChatController = ({ structureJson, codeChunksJson, selectedNode 
           throw new Error("Ingest a repository before asking code-specific questions.");
         }
 
-        const relevantContextJson = await vikiService.getRelevantContext({
-          prompt,
-          selectedFile: selectedNode,
-          structureJson,
-          codeChunksJson,
-        });
-
         streamIterator = brainService.streamWithContext({
           prompt,
           structureJson,
@@ -72,33 +77,31 @@ export const useChatController = ({ structureJson, codeChunksJson, selectedNode 
         streamIterator = brainService.streamWithContext({
           prompt,
           structureJson,
-          relevantContextJson: codeChunksJson,
+          relevantContextJson,
         });
       }
 
       for await (const { event, data } of streamIterator) {
         if (event === "start") {
-          setMessages((msgs) =>
-            msgs.map((msg) =>
-              msg.id === assistantMessageId
+          setMessages((currentMessages) =>
+            currentMessages.map((message) =>
+              message.id === assistantMessageId
                 ? {
-                    ...msg,
+                    ...message,
                     metadata: {
-                      ...msg.metadata,
-                      model: data.selected_model || "openrouter/auto",
+                      ...message.metadata,
+                      model: data.answered_by_model || data.selected_model,
                       pathsVerified: data.paths_verified,
                       fallbackUsed: data.fallback_used,
                     },
                   }
-                : msg
+                : message
             )
           );
         } else if (event === "token") {
-          setMessages((msgs) =>
-            msgs.map((msg) =>
-              msg.id === assistantMessageId
-                ? { ...msg, content: msg.content + data.token }
-                : msg
+          setMessages((currentMessages) =>
+            currentMessages.map((message) =>
+              message.id === assistantMessageId ? { ...message, content: message.content + data.token } : message
             )
           );
         } else if (event === "error") {
@@ -108,23 +111,26 @@ export const useChatController = ({ structureJson, codeChunksJson, selectedNode 
         }
       }
 
+      setMessages((currentMessages) =>
+        currentMessages.map((message) =>
+          message.id === assistantMessageId && !message.content ? { ...message, content: "No answer returned." } : message
+        )
+      );
       setStatus("idle");
     } catch (caughtError) {
       setError(caughtError.message || "Failed to ask the chatbot backend.");
       setStatus("error");
-      
       setMessages((currentMessages) => {
-        // If the error happened during streaming, the last message is the assistant message
-        const isAssistantMessageEmpty = currentMessages.length > 0 && 
-                                        currentMessages[currentMessages.length - 1].role === "assistant" &&
-                                        !currentMessages[currentMessages.length - 1].content;
-        
-        if (isAssistantMessageEmpty) {
-           return currentMessages.map((msg, index) => 
-             index === currentMessages.length - 1 
-               ? { ...msg, content: caughtError.message || "Failed to ask the chatbot backend.", metadata: { ...msg.metadata, isError: true } }
-               : msg
-           );
+        if (assistantMessageId && currentMessages.some((message) => message.id === assistantMessageId)) {
+          return currentMessages.map((message) =>
+            message.id === assistantMessageId
+              ? {
+                  ...message,
+                  content: message.content || caughtError.message || "Failed to ask the chatbot backend.",
+                  metadata: { ...message.metadata, isError: true },
+                }
+              : message
+          );
         }
 
         return [

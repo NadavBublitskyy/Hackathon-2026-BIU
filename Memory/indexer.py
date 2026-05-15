@@ -1,4 +1,5 @@
 import chromadb
+from typing import Optional
 
 
 COLLECTION_NAME = "code_chunks"
@@ -19,7 +20,7 @@ def build_document_text(chunk: dict) -> str:
     )
 
 
-def index_code_chunks(chunks: list[dict], persist_directory: str = "Memory/chroma_db") -> None:
+def index_code_chunks(chunks: list[dict], persist_directory: str = "Memory/chroma_db", index_signature: Optional[str] = None) -> None:
     """
     Indexes validated code chunks into a persistent ChromaDB collection.
 
@@ -38,7 +39,18 @@ def index_code_chunks(chunks: list[dict], persist_directory: str = "Memory/chrom
         raise ValueError("chunks cannot be empty.")
 
     client = chromadb.PersistentClient(path=persist_directory)
-    collection = client.get_or_create_collection(name=COLLECTION_NAME)
+
+    try:
+        client.delete_collection(name=COLLECTION_NAME)
+    except Exception as error:
+        if error.__class__.__name__ not in {"InvalidCollectionException", "NotFoundError"}:
+            raise
+
+    collection_metadata = {
+        "chunks_signature": index_signature or "",
+        "chunk_count": len(chunks),
+    }
+    collection = client.get_or_create_collection(name=COLLECTION_NAME, metadata=collection_metadata)
 
     ids = []
     documents = []

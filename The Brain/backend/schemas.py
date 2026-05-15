@@ -63,5 +63,7 @@ class PromptClassifyRequest(BaseModel):
     prompt: str = Field(min_length=1)
     # Store an optional selected file path from the graph.
     selected_file_path: str | None = Field(default=None)
+    # Store lightweight Memory candidates so classification can be biased by repo evidence.
+    retrieved_context: list[dict] = Field(default_factory=list)
     # Store the cheap classifier model used for the category decision.
     classifier_model_name: str = Field(default=DEFAULT_CLASSIFIER_MODEL_NAME, min_length=1)
