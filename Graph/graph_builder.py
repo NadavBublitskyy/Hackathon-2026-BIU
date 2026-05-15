@@ -83,9 +83,12 @@ def get_node_details(structure: dict, node_id: str) -> Optional[dict]:
 
         return {
             "id": file_path,
+            "path": file_path,
             "label": _get_label(file_data, file_path),
+            "name": _get_label(file_data, file_path),
             "group": _get_group(file_path),
             "definitions": _get_definitions(file_data),
+            "imports": _get_imports(file_data),
         }
 
     return None
@@ -124,10 +127,7 @@ def _get_label(file_data: dict, file_path: str) -> str:
 def _get_group(file_path: str) -> str:
     parts = PurePosixPath(file_path).parts
 
-    if len(parts) >= 3:
-        return parts[-2]
-
-    if len(parts) == 2:
+    if len(parts) >= 2:
         return parts[0]
 
     return "root"

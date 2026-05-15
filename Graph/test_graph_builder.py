@@ -65,7 +65,7 @@ def test_file_missing_definitions_is_not_in_main_graph_node():
     assert graph["nodes"][0] == {
         "id": "src/auth/login.py",
         "label": "login.py",
-        "group": "auth",
+        "group": "src",
     }
     assert graph["edges"] == []
 
@@ -295,6 +295,7 @@ def test_get_node_details_returns_full_metadata():
                         "functions": ["verify_token"],
                         "variables": ["MAX_RETRIES"],
                     },
+                    "imports": ["src/utils/security.py"],
                 }
             ]
         },
@@ -303,13 +304,16 @@ def test_get_node_details_returns_full_metadata():
 
     assert details == {
         "id": "src/auth/login.py",
+        "path": "src/auth/login.py",
         "label": "login.py",
-        "group": "auth",
+        "name": "login.py",
+        "group": "src",
         "definitions": {
             "classes": ["Authenticator"],
             "functions": ["verify_token"],
             "variables": ["MAX_RETRIES"],
         },
+        "imports": ["src/utils/security.py"],
     }
 
 

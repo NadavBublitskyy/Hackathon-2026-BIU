@@ -4,7 +4,7 @@ const groupFromPath = (path) => {
   const parts = path.split("/").filter(Boolean);
 
   if (parts.length >= 2) {
-    return parts.at(-2);
+    return parts[0];
   }
 
   return "root";
@@ -36,6 +36,7 @@ const resolveImportTarget = (importValue, knownPaths) => {
 };
 
 export const buildGraphFromStructure = (structureJson) => {
+  // Backend graph_data from Graph/ is the source of truth; this builder is fallback-only for demo resilience.
   const files = Array.isArray(structureJson?.files) ? structureJson.files : [];
   const paths = files.map(extractFilePath).filter(Boolean);
 

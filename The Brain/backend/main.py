@@ -33,6 +33,8 @@ for project_root in project_root_candidates:
 # Import route modules so this file only registers routers.
 from backend.routes import blueprint_routes, chat_routes, classification_routes, repo_routes, status_routes
 
+# Import the Graph router after the project root is available on sys.path.
+from Graph.api import router as graph_router
 # Import the Memory router after the project root is available on sys.path.
 from Memory.api import router as memory_router
 
@@ -80,5 +82,7 @@ app.include_router(classification_routes.router)
 app.include_router(chat_routes.router)
 # Register context-aware blueprint endpoints.
 app.include_router(blueprint_routes.router)
+# Register graph helper endpoints under the backend API namespace.
+app.include_router(graph_router, prefix="/api")
 # Register Memory endpoints.
 app.include_router(memory_router)

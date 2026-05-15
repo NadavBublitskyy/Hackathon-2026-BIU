@@ -28,6 +28,7 @@ export function GraphNodeDetails({ selectedNode, onClear }) {
   }
 
   const definitions = selectedNode.definitions || {};
+  const imports = Array.isArray(selectedNode.imports) ? selectedNode.imports : [];
 
   return (
     <aside className="node-details">
@@ -41,9 +42,12 @@ export function GraphNodeDetails({ selectedNode, onClear }) {
         </button>
       </div>
       <p>{selectedNode.id}</p>
+      {selectedNode.isLoadingDetails ? <p>Loading file details...</p> : null}
+      {selectedNode.detailError ? <p className="node-details-error">{selectedNode.detailError}</p> : null}
       {renderList("Classes", definitions.classes)}
       {renderList("Functions", definitions.functions)}
       {renderList("Variables", definitions.variables)}
+      {renderList("Imports", imports)}
     </aside>
   );
 }
