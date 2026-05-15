@@ -1,6 +1,7 @@
 import os
 import re
 import json
+from code_chunker import CodeChunker
 
 # This module defines the ProjectAnalyzer class, which takes a list of files from GitHubIngestor,
 # builds a hierarchical structure, extracts imports, tags metadata, and saves the overall structure to a JSON file.
@@ -104,26 +105,36 @@ class ProjectAnalyzer:
 
         return 'Unknown'
 
-    def analyze_files(self, ingestor, owner: str, repo_name: str) -> dict:
-        """Fetch each file's content via *ingestor* and return per-file analysis."""
+    def analyze_files(self, ingestor=None, owner: str = "", repo_name: str = "") -> dict:
+        """Return per-file analysis with imports, metadata, and code chunks.
+
+        If a file dict already carries a 'content' key (ZIP download flow) it is
+        used directly.  Otherwise the content is fetched via ingestor.get_file_content
+        (legacy SHA-based flow).
+        """
         result = {}
+        chunker = CodeChunker()
         for file in self.files:
             path = file["path"]
             ext = os.path.splitext(path)[1].lower()
-            content = ingestor.get_file_content(owner, repo_name, file["sha"])
+            content = file.get("content")
+            if content is None and ingestor is not None:
+                content = ingestor.get_file_content(owner, repo_name, file["sha"])
+            content = content or ""
             raw_imports = self.extract_imports(content, ext)
             result[path] = {
                 "type": self.tag_metadata(path),
                 "language": self._LANGUAGE_MAP.get(ext, "Unknown"),
                 "imports": self._resolve_internal_dependencies(raw_imports, ext, path),
+                "chunks": chunker.chunk(content, path),
             }
         return result
 
     def save_structure(
         self,
-        ingestor,
-        owner: str,
-        repo_name: str,
+        ingestor=None,
+        owner: str = "",
+        repo_name: str = "",
         output_path: str = "structure.json",
     ) -> dict:
         """Build the full structure, save it to *output_path*, and return it."""
