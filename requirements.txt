@@ -1,5 +1,6 @@
 networkx>=3.0
 chromadb
+httpx>=0.27.0
 fastapi
 uvicorn[standard]
 # tree-sitter MUST stay at 0.21.3 — tree-sitter-languages 1.10.2 is compiled

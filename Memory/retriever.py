@@ -1,22 +1,20 @@
-import chromadb
+from Memory.chroma_factory import DEFAULT_PERSIST_DIRECTORY, get_collection, get_embed_fn
 
 
-DEFAULT_PERSIST_DIRECTORY = "Memory/chroma_db"
 DEFAULT_COLLECTION_NAME = "code_chunks"
+
+_MAX_QUERY_RESULTS = 5
 
 
 def get_collection_state(
     collection_name: str = DEFAULT_COLLECTION_NAME,
     persist_directory: str = DEFAULT_PERSIST_DIRECTORY,
 ) -> dict:
-    """
-    Returns collection metadata without running an embedding query.
-    """
-
-    client = chromadb.PersistentClient(path=persist_directory)
-
     try:
-        collection = client.get_collection(name=collection_name)
+        collection = get_collection(
+            collection_name=collection_name,
+            persist_directory=persist_directory,
+        )
     except Exception as error:
         if error.__class__.__name__ in {"InvalidCollectionException", "NotFoundError"}:
             return {
@@ -25,7 +23,6 @@ def get_collection_state(
                 "metadata": {},
                 "chunks_signature": None,
             }
-
         raise
 
     metadata = collection.metadata or {}
@@ -39,20 +36,11 @@ def get_collection_state(
 
 
 def distance_to_score(distance: float) -> float:
-    """
-    Converts a ChromaDB distance into a relevance score.
-    """
-
     score = 1 / (1 + distance)
-
     return round(score, 4)
 
 
 def build_snippet_results(results: dict) -> list[dict]:
-    """
-    Builds snippet dictionaries from ChromaDB query results.
-    """
-
     documents_groups = results.get("documents") or []
     metadatas_groups = results.get("metadatas") or []
     distances_groups = results.get("distances") or []
@@ -97,10 +85,6 @@ def filter_snippets_by_relative_score(
     relative_score_threshold: float,
     min_score: float,
 ) -> list[dict]:
-    """
-    Keeps snippets close enough to the best result score.
-    """
-
     if len(snippets) == 0:
         return []
 
@@ -121,10 +105,6 @@ def retrieve_snippets(
     collection_name: str = DEFAULT_COLLECTION_NAME,
     persist_directory: str = DEFAULT_PERSIST_DIRECTORY,
 ) -> list[dict]:
-    """
-    Retrieves the most relevant code snippets from an existing ChromaDB collection.
-    """
-
     if query is None or query.strip() == "":
         raise ValueError("query cannot be empty.")
 
@@ -134,24 +114,28 @@ def retrieve_snippets(
     if min_score < 0:
         raise ValueError("min_score cannot be negative.")
 
-    client = chromadb.PersistentClient(path=persist_directory)
-
     try:
-        collection = client.get_collection(name=collection_name)
+        collection = get_collection(
+            collection_name=collection_name,
+            persist_directory=persist_directory,
+        )
     except Exception as error:
         if error.__class__.__name__ in {"InvalidCollectionException", "NotFoundError"}:
             return []
-
         raise
 
     indexed_chunks_count = collection.count()
+    print(f"DEBUG: Querying collection with {indexed_chunks_count} docs", flush=True)
 
     if indexed_chunks_count == 0:
         return []
 
+    # Pre-compute the query embedding ourselves so we control the shape passed
+    # to ChromaDB's Rust bindings — query_embeddings must be list[list[float]].
+    query_embedding = get_embed_fn().embed_query(query)
     results = collection.query(
-        query_texts=[query],
-        n_results=indexed_chunks_count,
+        query_embeddings=[query_embedding],
+        n_results=min(_MAX_QUERY_RESULTS, indexed_chunks_count),
         include=["documents", "metadatas", "distances"],
     )
 

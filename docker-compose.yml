@@ -22,7 +22,7 @@ services:
       # Pass the remote LLM base URL into the container.
       LLM_BASE_URL: ${LLM_BASE_URL:-https://openrouter.ai/api/v1}
       # Pass the selected LLM model name into the container.
-      LLM_MODEL_NAME: ${LLM_MODEL_NAME:-openrouter/auto}
+      LLM_MODEL_NAME: ${LLM_MODEL_NAME:-openai/gpt-4o-mini}
       # Pass a generic LLM API key into the container when it exists.
       LLM_API_KEY: ${LLM_API_KEY:-}
       # Pass the OpenRouter API key into the container when it exists.
@@ -77,7 +77,7 @@ services:
         # Configure the general chat API path.
         VITE_GENERAL_CHAT_ENDPOINT: ${VITE_GENERAL_CHAT_ENDPOINT:-/api/chat/routed}
         # Configure the repo-aware Brain API path.
-        VITE_BLUEPRINT_ENDPOINT: ${VITE_BLUEPRINT_ENDPOINT:-/api/blueprint/routed}
+        VITE_BLUEPRINT_ENDPOINT: ${VITE_BLUEPRINT_ENDPOINT:-/api/blueprint}
         # Configure the Viki semantic retrieval API path.
         VITE_VIKI_CONTEXT_ENDPOINT: ${VITE_VIKI_CONTEXT_ENDPOINT:-/api/memory/retrieve}
         # Configure the prompt classification API path.

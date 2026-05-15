@@ -3,7 +3,7 @@ import { ChatMessage } from "../ChatMessage/ChatMessage";
 import { PromptComposer } from "../PromptComposer/PromptComposer";
 
 export function ChatPanel({ messages, status, error, selectedNode, onAsk, onClear }) {
-  const isBusy = status === "answering" || status === "classifying";
+  const isBusy = status === "answering" || status === "classifying" || status === "retrieving";
 
   return (
     <section className="chat-panel">
@@ -30,7 +30,7 @@ export function ChatPanel({ messages, status, error, selectedNode, onAsk, onClea
         {isBusy ? (
           <div className="answering-row">
             <Loader2 size={16} className="spin" />
-            {status === "classifying" ? "Classifying prompt with the routing model" : "Routing request and waiting for the model"}
+            {status === "retrieving" ? "Searching knowledge base..." : status === "classifying" ? "Classifying prompt..." : "Waiting for the model..."}
           </div>
         ) : null}
       </div>

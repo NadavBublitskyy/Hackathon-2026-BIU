@@ -7,13 +7,8 @@ from typing import Any
 
 # Store the system instruction that defines the LLM persona and accuracy rules.
 CONTEXT_SYSTEM_PROMPT = """
-You are an expert software architect helping a developer understand a codebase.
-
-Use the provided repository structure and semantic code snippets as your source of truth.
-Prioritize accuracy over guessing.
-When the context includes file paths, mention the relevant file paths in your answer.
-If the answer is not present in the provided context, say what is missing and what file or area should be inspected next.
-Do not invent files, functions, imports, or APIs that are not supported by the context.
+You are a software architect answering questions about a codebase.
+Use only the provided snippets and structure. Cite file paths. Be concise.
 """.strip()
 
 # Store the human prompt template that injects all context layers into one readable prompt.
@@ -32,8 +27,8 @@ CONTEXT_HUMAN_PROMPT = """
 """.strip()
 
 # Keep answer prompts focused without hard-coding a number of files.
-MAX_RELEVANT_CONTEXT_CHARS = 12_000
-MAX_SINGLE_SNIPPET_CHARS = 2_500
+MAX_RELEVANT_CONTEXT_CHARS = 3_000
+MAX_SINGLE_SNIPPET_CHARS = 800
 MIN_PROMPT_SNIPPET_SCORE = 0.40
 RELATIVE_PROMPT_SCORE_THRESHOLD = 0.65
 

@@ -14,6 +14,7 @@ _pending_signature: str | None = None
 _worker_task: asyncio.Task | None = None
 _indexing_signature: str | None = None
 _ready_signature: str | None = None
+_ready_chunk_count: int = 0
 _state = "idle"
 _last_error: str | None = None
 
@@ -67,7 +68,15 @@ def schedule_chroma_indexing(code_chunks_json: list[dict[str, Any]]) -> dict[str
 def is_chroma_ready_for_chunks(code_chunks_json: list[dict[str, Any]]) -> bool:
     """Return true only when the persistent Chroma collection matches these chunks."""
 
-    global _ready_signature, _state
+    global _ready_signature, _state, _ready_chunk_count
+
+    if not code_chunks_json:
+        return False
+
+    # O(1) fast path: skip cloning and hashing when we already verified readiness
+    # and the incoming list has the same length as what was indexed.
+    if _ready_signature is not None and len(code_chunks_json) == _ready_chunk_count:
+        return True
 
     chunks = clone_chunks(code_chunks_json)
     if not chunks:
@@ -75,6 +84,7 @@ def is_chroma_ready_for_chunks(code_chunks_json: list[dict[str, Any]]) -> bool:
 
     signature = build_chunks_signature(chunks)
     if _ready_signature == signature:
+        _ready_chunk_count = len(chunks)
         return True
 
     collection_state = read_persistent_collection_state()
@@ -83,6 +93,7 @@ def is_chroma_ready_for_chunks(code_chunks_json: list[dict[str, Any]]) -> bool:
         and collection_state.get("count") == len(chunks)
     ):
         _ready_signature = signature
+        _ready_chunk_count = len(chunks)
         _state = "ready"
         return True
 
@@ -130,7 +141,7 @@ def get_chroma_index_status(code_chunks_json: list[dict[str, Any]] | None = None
 async def run_index_worker() -> None:
     """Index the newest queued chunks, serially, on a worker thread."""
 
-    global _pending_chunks, _pending_signature, _indexing_signature, _ready_signature, _state, _last_error
+    global _pending_chunks, _pending_signature, _indexing_signature, _ready_signature, _ready_chunk_count, _state, _last_error
 
     while True:
         chunks = _pending_chunks
@@ -156,9 +167,16 @@ async def run_index_worker() -> None:
                 return
         else:
             _ready_signature = signature
+            _ready_chunk_count = len(chunks)
             _last_error = None
             _state = "queued" if _pending_chunks is not None else "ready"
             _indexing_signature = None
+            # Force retriever to open a fresh client so it sees the new collection.
+            try:
+                from Memory.chroma_factory import reset_client
+                reset_client()
+            except Exception:
+                pass
 
         if _pending_chunks is None:
             return

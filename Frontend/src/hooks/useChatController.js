@@ -23,22 +23,28 @@ export const useChatController = ({ structureJson, codeChunksJson, selectedNode 
     let route = null;
     let assistantMessageId = null;
 
-    setStatus("classifying");
+    setStatus("retrieving");
     setError("");
 
     try {
       let relevantContextJson = [];
 
       if (canAskRepoQuestions) {
-        relevantContextJson = await vikiService.getRelevantContext({
-          prompt,
-          selectedFile: selectedNode,
-          structureJson,
-          codeChunksJson,
-        });
+        // Run retrieval and classification in parallel — classification uses the
+        // prompt text alone (no retrieved context) so it can start immediately.
+        [relevantContextJson, route] = await Promise.all([
+          vikiService.getRelevantContext({
+            prompt,
+            selectedFile: selectedNode,
+            structureJson,
+            codeChunksJson,
+          }),
+          classificationService.classifyPrompt({ prompt, selectedNode, retrievedContextJson: [] }),
+        ]);
+      } else {
+        setStatus("classifying");
+        route = await classificationService.classifyPrompt({ prompt, selectedNode, retrievedContextJson: [] });
       }
-
-      route = await classificationService.classifyPrompt({ prompt, selectedNode, retrievedContextJson: relevantContextJson });
       const userMessage = createMessage("user", prompt, { route });
       assistantMessageId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 

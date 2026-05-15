@@ -12,6 +12,8 @@ from typing import Any
 
 # Import Chroma readiness checks so retrieval never blocks on a cold vector store.
 from backend.services.chroma_index_service import is_chroma_ready_for_chunks
+# Import the backend chunk cache so queries use server-side chunks instead of the request payload.
+from backend.services.session_store import get_cached_chunks
 
 # Create a logger for retrieval diagnostics.
 logger = logging.getLogger(__name__)
@@ -67,6 +69,10 @@ def retrieve_relevant_context(query: str, code_chunks_json: list[dict[str, Any]]
 
 # Retrieve relevant code snippets and include source metadata for logs/API responses.
 def retrieve_relevant_context_with_metadata(query: str, code_chunks_json: list[dict[str, Any]], selected_file_path: str | None = None, top_k: int | None = None) -> dict[str, Any]:
+    # Prefer server-side cached chunks — avoids re-sending large payloads from the frontend.
+    cached = get_cached_chunks()
+    if cached:
+        code_chunks_json = cached
     # Reject empty queries because retrieval needs text.
     if not query.strip():
         # Log and return no context for empty prompts.
@@ -113,11 +119,17 @@ def retrieve_chroma_context(query: str, code_chunks_json: list[dict[str, Any]], 
     try:
         snippets = retrieve_snippets(query)
     except Exception:
+        logger.exception("ChromaDB retrieve_snippets raised an exception — falling back to lexical.")
         return []
     # Apply an explicit caller limit only when one was provided.
     selected_snippets = snippets[:top_k] if top_k is not None else snippets
-    # Normalize Memory snippet keys into Brain relevant_context keys.
-    return [to_relevant_context(snippet, float(snippet.get("score") or 0.0)) for snippet in selected_snippets]
+    results = [to_relevant_context(snippet, float(snippet.get("score") or 0.0)) for snippet in selected_snippets]
+    logger.info(
+        "chroma_context snippets=%s content_non_empty=%s",
+        len(results),
+        sum(1 for r in results if r.get("content")),
+    )
+    return results
 
 
 # Retrieve relevant code snippets from provided code_chunks_json without an external vector store.

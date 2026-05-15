@@ -96,7 +96,7 @@ async def blueprint_stream(prompt: str = Form(..., min_length=1), structure_json
     # Build the exact message payload sent to the LLM.
     messages = build_blueprint_stream(prompt, structure_data, relevant_context_data)
     # Return the SSE stream with hardcoded LLM settings.
-    return make_sse_response(stream_llm_response(messages=messages, max_tokens=1200))
+    return make_sse_response(stream_llm_response(messages=messages, max_tokens=500))
 
 
 # Register the routed streaming context-aware blueprint endpoint.
@@ -130,4 +130,4 @@ async def blueprint_routed_stream(
         # Raise a 502 response with a safe error message.
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     # Return the SSE stream using the selected model.
-    return make_sse_response(stream_llm_response(messages=messages, max_tokens=1200, model_name=selected_model, start_data=start_data))
+    return make_sse_response(stream_llm_response(messages=messages, max_tokens=500, model_name=selected_model, start_data=start_data))
