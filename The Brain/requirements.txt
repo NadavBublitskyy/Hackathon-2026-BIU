@@ -12,3 +12,6 @@ python-multipart==0.0.20
 uvicorn[standard]==0.34.0
 # ChromaDB stores and retrieves Memory code chunk embeddings locally.
 chromadb
+# Tree-sitter powers the shared CodeChunker used for class/function chunks.
+tree-sitter==0.21.3
+tree-sitter-languages==1.10.2

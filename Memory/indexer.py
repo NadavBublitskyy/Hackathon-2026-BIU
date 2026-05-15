@@ -1,6 +1,8 @@
 import chromadb
 from typing import Optional
 
+from Memory.chunk_adapter import normalize_chunk, normalize_chunks
+
 
 COLLECTION_NAME = "code_chunks"
 
@@ -10,13 +12,17 @@ def build_document_text(chunk: dict) -> str:
     Builds searchable text for a validated code chunk.
     """
 
+    normalized_chunk = normalize_chunk(chunk)
+    if normalized_chunk is None:
+        raise ValueError("chunk cannot be normalized.")
+
     return (
-        f"File path: {chunk['file_path']}\n"
-        f"Type: {chunk['type']}\n"
-        f"Name: {chunk['name']}\n"
-        f"Scope: {chunk['scope']}\n"
+        f"File path: {normalized_chunk['file_path']}\n"
+        f"Type: {normalized_chunk['type']}\n"
+        f"Name: {normalized_chunk['name']}\n"
+        f"Scope: {normalized_chunk['scope']}\n"
         "Code:\n"
-        f"{chunk['content']}"
+        f"{normalized_chunk['content']}"
     )
 
 
@@ -35,7 +41,9 @@ def index_code_chunks(chunks: list[dict], persist_directory: str = "Memory/chrom
     if not isinstance(chunks, list):
         raise ValueError("chunks must be a list.")
 
-    if len(chunks) == 0:
+    normalized_chunks = normalize_chunks(chunks)
+
+    if len(normalized_chunks) == 0:
         raise ValueError("chunks cannot be empty.")
 
     client = chromadb.PersistentClient(path=persist_directory)
@@ -48,7 +56,7 @@ def index_code_chunks(chunks: list[dict], persist_directory: str = "Memory/chrom
 
     collection_metadata = {
         "chunks_signature": index_signature or "",
-        "chunk_count": len(chunks),
+        "chunk_count": len(normalized_chunks),
     }
     collection = client.get_or_create_collection(name=COLLECTION_NAME, metadata=collection_metadata)
 
@@ -56,7 +64,7 @@ def index_code_chunks(chunks: list[dict], persist_directory: str = "Memory/chrom
     documents = []
     metadatas = []
 
-    for chunk in chunks:
+    for chunk in normalized_chunks:
         ids.append(chunk["chunk_id"])
         documents.append(build_document_text(chunk))
         metadatas.append(

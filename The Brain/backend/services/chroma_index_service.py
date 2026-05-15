@@ -7,6 +7,8 @@ import hashlib
 import logging
 from typing import Any
 
+from Memory.chunk_adapter import normalize_chunks
+
 logger = logging.getLogger(__name__)
 
 _pending_chunks: list[dict[str, Any]] | None = None
@@ -184,12 +186,12 @@ def read_persistent_collection_state() -> dict[str, Any]:
 
 
 def clone_chunks(code_chunks_json: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Copy valid chunk dictionaries so background indexing does not share mutable input."""
+    """Normalize chunks so background indexing does not share mutable input."""
 
     if not isinstance(code_chunks_json, list):
         return []
 
-    return [dict(chunk) for chunk in code_chunks_json if isinstance(chunk, dict)]
+    return normalize_chunks([dict(chunk) for chunk in code_chunks_json if isinstance(chunk, dict)])
 
 
 def build_chunks_signature(chunks: list[dict[str, Any]]) -> str:

@@ -21,11 +21,11 @@ export const normalizeRelevantContext = (payload) => {
 
   return snippets.map((item, index) => ({
     file_path: item.file_path || item.path || item.filename || "",
-    function_name: item.function_name || item.name || item.symbol || `snippet_${index + 1}`,
+    function_name: item.function_name || item.name || item.entity_name || item.symbol || `snippet_${index + 1}`,
     content: item.content || item.code || item.text || "",
     score: item.score,
-    start_line: item.start_line,
-    end_line: item.end_line,
+    start_line: item.start_line || item.line_range?.[0],
+    end_line: item.end_line || item.line_range?.[1],
   }));
 };
 

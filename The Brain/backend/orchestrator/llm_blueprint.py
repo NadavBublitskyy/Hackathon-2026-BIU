@@ -201,7 +201,7 @@ def format_relevant_context(relevant_context: Any) -> str:
         # Read the best file path value from the snippet.
         file_path = _first_text_value(snippet, ("file_path", "path", "filename", "file")) or "unknown_file"
         # Read the optional function name from the snippet.
-        function_name = _first_text_value(snippet, ("function_name", "name", "symbol"))
+        function_name = _first_text_value(snippet, ("function_name", "name", "entity_name", "symbol"))
         # Read the code/content value from the snippet.
         content = _fit_snippet_content(str(snippet.get("content") or snippet.get("code") or snippet.get("text") or ""))
         # Build the snippet header with a file path and optional function name.

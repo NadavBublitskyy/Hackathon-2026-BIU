@@ -256,14 +256,25 @@ def normalize_retrieved_context(retrieved_context: list[dict[str, Any]] | None) 
         normalized_candidates.append(
             {
                 "file_path": file_path,
-                "function_name": str(item.get("function_name") or item.get("name") or item.get("symbol") or "").strip(),
+                "function_name": str(item.get("function_name") or item.get("name") or item.get("entity_name") or item.get("symbol") or "").strip(),
                 "score": item.get("score"),
-                "start_line": item.get("start_line"),
-                "end_line": item.get("end_line"),
+                "start_line": item.get("start_line") or read_line_range_value(item, 0),
+                "end_line": item.get("end_line") or read_line_range_value(item, 1),
             }
         )
     # Return normalized candidates.
     return normalized_candidates
+
+
+# Read one value from a tree-sitter-style line_range field.
+def read_line_range_value(item: dict[str, Any], index: int) -> Any:
+    # Read the optional line_range value.
+    line_range = item.get("line_range")
+    # Return indexed list/tuple values.
+    if isinstance(line_range, (list, tuple)) and len(line_range) > index:
+        return line_range[index]
+    # No line range value was available.
+    return None
 
 
 # Build compact Memory evidence text for the LLM classifier.

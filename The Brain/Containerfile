@@ -23,6 +23,9 @@ COPY ["The Brain/backend", "./backend"]
 # Copy the Memory package used by the Memory API routes.
 COPY ["Memory", "./Memory"]
 
+# Copy the shared ingestor helpers used for tree-sitter code chunking.
+COPY ["Ingestor", "./Ingestor"]
+
 # Document that the service listens on port 8000.
 EXPOSE 8000
 

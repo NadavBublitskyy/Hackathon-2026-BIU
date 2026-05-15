@@ -8,10 +8,10 @@ const toClassifierContext = (retrievedContextJson = []) => {
 
   return retrievedContextJson.map((item) => ({
     file_path: item.file_path || item.path || item.filename || "",
-    function_name: item.function_name || item.name || item.symbol || "",
+    function_name: item.function_name || item.name || item.entity_name || item.symbol || "",
     score: item.score,
-    start_line: item.start_line,
-    end_line: item.end_line,
+    start_line: item.start_line || item.line_range?.[0],
+    end_line: item.end_line || item.line_range?.[1],
   }));
 };
 

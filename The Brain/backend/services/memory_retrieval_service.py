@@ -12,6 +12,8 @@ from typing import Any
 
 # Import Chroma readiness checks so retrieval never blocks on a cold vector store.
 from backend.services.chroma_index_service import is_chroma_ready_for_chunks
+# Import chunk normalization so old and tree-sitter chunk shapes both work.
+from Memory.chunk_adapter import normalize_chunk
 
 # Create a logger for retrieval diagnostics.
 logger = logging.getLogger(__name__)
@@ -127,13 +129,17 @@ def retrieve_lexical_context(query: str, code_chunks_json: list[dict[str, Any]],
     # Score every chunk.
     scored_chunks = []
     # Iterate over code chunks.
-    for chunk in code_chunks_json:
+    for index, chunk in enumerate(code_chunks_json, start=1):
+        # Normalize old and new chunk shapes before scoring.
+        normalized_chunk = normalize_chunk(chunk, index)
+        if normalized_chunk is None:
+            continue
         # Score the chunk against the query.
-        score = score_chunk(chunk, query_tokens, selected_file_path)
+        score = score_chunk(normalized_chunk, query_tokens, selected_file_path)
         # Keep chunks with positive relevance.
         if score > 0:
             # Store score and chunk.
-            scored_chunks.append((score, chunk))
+            scored_chunks.append((score, normalized_chunk))
     # Sort by descending relevance.
     scored_chunks.sort(key=lambda item: item[0], reverse=True)
     # Keep every relevant chunk unless the caller explicitly provides a limit.
@@ -170,7 +176,7 @@ def score_chunk(chunk: dict[str, Any], query_tokens: set[str], selected_file_pat
             return 0.95
         return 0.0
     # Build searchable text from common chunk fields.
-    searchable_text = " ".join(str(chunk.get(key, "")) for key in ("file_path", "path", "name", "function_name", "scope", "type", "content"))
+    searchable_text = " ".join(str(chunk.get(key, "")) for key in ("file_path", "path", "name", "function_name", "entity_name", "scope", "type", "content"))
     # Tokenize the chunk text.
     chunk_tokens = tokenize(searchable_text)
     # Count query overlap.
@@ -182,7 +188,7 @@ def score_chunk(chunk: dict[str, Any], query_tokens: set[str], selected_file_pat
         # Selected files are explicitly relevant even when the prompt uses generic wording.
         score = max(score, 0.95)
     # Boost exact symbol mentions in the user query.
-    name = str(chunk.get("name") or chunk.get("function_name") or "").lower()
+    name = str(chunk.get("name") or chunk.get("function_name") or chunk.get("entity_name") or "").lower()
     # Add exact name boost when the symbol appears in the query tokens.
     if name and name.lower() in query_tokens:
         # Exact symbol matches should cross the specific-code threshold.
@@ -217,12 +223,14 @@ def log_retrieval_decision(query: str, retrieval_source: str, selected_file_path
 
 # Convert a scored chunk into the relevant_context shape consumed by Brain.
 def to_relevant_context(chunk: dict[str, Any], score: float) -> dict[str, Any]:
+    # Normalize possible raw chunk shapes before building relevant_context.
+    normalized_chunk = normalize_chunk(chunk) or chunk
     # Return normalized context keys.
     return {
-        "file_path": chunk.get("file_path") or chunk.get("path") or "",
-        "function_name": chunk.get("function_name") or chunk.get("name") or "",
-        "content": chunk.get("content") or chunk.get("code") or "",
+        "file_path": normalized_chunk.get("file_path") or normalized_chunk.get("path") or "",
+        "function_name": normalized_chunk.get("function_name") or normalized_chunk.get("name") or normalized_chunk.get("entity_name") or "",
+        "content": normalized_chunk.get("content") or normalized_chunk.get("code") or "",
         "score": round(score, 4),
-        "start_line": chunk.get("start_line"),
-        "end_line": chunk.get("end_line"),
+        "start_line": normalized_chunk.get("start_line"),
+        "end_line": normalized_chunk.get("end_line"),
     }

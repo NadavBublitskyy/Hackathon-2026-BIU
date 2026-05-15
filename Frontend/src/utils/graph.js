@@ -71,23 +71,3 @@ export const normalizeGraphData = (payload) => {
 
   return { nodes, edges };
 };
-
-export const createGraphLayout = (graphData, width = 880, height = 620) => {
-  const nodes = graphData.nodes || [];
-  const radius = Math.min(width, height) * 0.36;
-  const centerX = width / 2;
-  const centerY = height / 2;
-  const groups = [...new Set(nodes.map((node) => node.group || "root"))];
-
-  return nodes.map((node, index) => {
-    const groupIndex = Math.max(groups.indexOf(node.group || "root"), 0);
-    const angle = (index / Math.max(nodes.length, 1)) * Math.PI * 2;
-    const groupOffset = (groupIndex - groups.length / 2) * 18;
-
-    return {
-      ...node,
-      x: centerX + Math.cos(angle) * (radius + groupOffset),
-      y: centerY + Math.sin(angle) * (radius - groupOffset * 0.5),
-    };
-  });
-};

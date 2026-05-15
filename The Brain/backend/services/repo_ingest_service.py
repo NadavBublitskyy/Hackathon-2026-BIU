@@ -18,6 +18,8 @@ from typing import Any
 
 # Import httpx so the backend can call GitHub's public API without a token.
 import httpx
+# Import chunk normalization so the app can consume both legacy and tree-sitter chunks.
+from Memory.chunk_adapter import normalize_chunk
 
 # Define public GitHub URL validation for owner/repo pairs.
 GITHUB_REPO_PATTERN = re.compile(r"^https://github\.com/([^/\s]+)/([^/\s#?]+?)(?:\.git)?/?$", re.IGNORECASE)
@@ -202,12 +204,15 @@ def build_code_chunks_json(contents: dict[str, str]) -> list[dict[str, Any]]:
         if not file_chunks and content.strip():
             # Create a short file-level chunk.
             file_chunks = [{"type": "file", "name": PurePosixPath(file_path).name, "scope": "global", "content": trim_lines(content, 1, 80), "start_line": 1, "end_line": min(len(content.splitlines()), 80)}]
-        # Add stable chunk IDs.
+        # Add stable app-compatible chunk fields.
         for chunk in file_chunks:
-            # Add source path and ID fields expected by Memory and Brain.
-            chunks.append({"chunk_id": f"ch_{chunk_index}", "file_path": file_path, **chunk})
-            # Increment the chunk ID counter.
-            chunk_index += 1
+            # Normalize old regex chunks and new tree-sitter chunks into one internal shape.
+            normalized_chunk = normalize_chunk({"file_path": file_path, **chunk}, chunk_index)
+            if normalized_chunk is not None:
+                # Add the normalized chunk expected by Memory and Brain.
+                chunks.append(normalized_chunk)
+                # Increment the chunk ID counter only for accepted chunks.
+                chunk_index += 1
     # Return the complete code_chunks.json list.
     return chunks
 
@@ -290,6 +295,11 @@ def unique_regex_matches(patterns: list[str], content: str) -> list[str]:
 
 # Extract chunks around classes and functions.
 def extract_chunks(file_path: str, content: str) -> list[dict[str, Any]]:
+    # Prefer the tree-sitter chunker when its optional parser dependency is available.
+    tree_sitter_chunks = extract_tree_sitter_chunks(file_path, content)
+    if tree_sitter_chunks:
+        return tree_sitter_chunks
+
     # Split source text into lines.
     lines = content.splitlines()
     # Find symbol start lines.
@@ -308,6 +318,21 @@ def extract_chunks(file_path: str, content: str) -> list[dict[str, Any]]:
         chunks.append({"type": symbol["type"], "name": symbol["name"], "scope": "global", "content": snippet, "start_line": symbol["line"], "end_line": end_line})
     # Return extracted chunks.
     return chunks
+
+
+# Extract chunks with the shared tree-sitter implementation from Ingestor.
+def extract_tree_sitter_chunks(file_path: str, content: str) -> list[dict[str, Any]]:
+    # Import lazily so local tooling and Docker builds can still run without the optional parser installed.
+    try:
+        from Ingestor.code_chunker import CodeChunker
+    except Exception:
+        return []
+
+    try:
+        return CodeChunker().chunk(content, file_path)
+    except Exception:
+        logger.exception("Tree-sitter code chunking failed for %s; falling back to regex chunking.", file_path)
+        return []
 
 
 # Find class and function symbols with line numbers.

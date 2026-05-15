@@ -1,6 +1,6 @@
 import { GitPullRequestArrow } from "lucide-react";
-import { useMemo } from "react";
-import { createGraphLayout } from "../../utils/graph";
+import { useMemo, useCallback } from "react";
+import ForceGraph2D from "react-force-graph-2d";
 
 const WIDTH = 880;
 const HEIGHT = 620;
@@ -13,74 +13,62 @@ const nodeColor = (group) => {
 };
 
 export function RepoGraph({ graphData, selectedNode, onSelectNode }) {
-  const positionedNodes = useMemo(() => createGraphLayout(graphData, WIDTH, HEIGHT), [graphData]);
-  const nodeMap = useMemo(() => new Map(positionedNodes.map((node) => [node.id, node])), [positionedNodes]);
-  const edges = graphData.edges || [];
+  const fgData = useMemo(() => {
+    return {
+      nodes: graphData?.nodes || [],
+      links: graphData?.edges || [],
+    };
+  }, [graphData]);
+
+  const handleNodeClick = useCallback(
+    (node) => {
+      onSelectNode(node);
+    },
+    [onSelectNode]
+  );
 
   return (
     <section className="repo-graph-panel">
       <div className="panel-header">
         <div>
           <h2>Dependency graph</h2>
-          <p>{positionedNodes.length} files · {edges.length} imports</p>
+          <p>{fgData.nodes.length} files · {fgData.links.length} imports</p>
         </div>
         <span className="graph-icon" aria-hidden="true">
           <GitPullRequestArrow size={18} />
         </span>
       </div>
 
-      <div className="graph-canvas" role="img" aria-label="Repository dependency graph">
-        <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} preserveAspectRatio="xMidYMid meet">
-          <g className="edge-layer">
-            {edges.map((edge, index) => {
-              const source = nodeMap.get(edge.source);
-              const target = nodeMap.get(edge.target);
+      <div className="graph-canvas" role="region" aria-label="Repository dependency graph">
+        <ForceGraph2D
+          graphData={fgData}
+          width={WIDTH}
+          height={HEIGHT}
+          nodeLabel="label"
+          onNodeClick={handleNodeClick}
+          linkDirectionalArrowLength={3.5}
+          linkDirectionalArrowRelPos={1}
+          linkColor={() => 'rgba(255, 255, 255, 0.2)'}
+          nodeCanvasObject={(node, ctx, globalScale) => {
+            const isSelected = selectedNode?.id === node.id;
+            const radius = isSelected ? 8 : 5;
+            
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI, false);
+            ctx.fillStyle = isSelected ? "#fbbf24" : nodeColor(node.group);
+            ctx.fill();
 
-              if (!source || !target) {
-                return null;
-              }
-
-              return (
-                <line
-                  key={`${edge.source}-${edge.target}-${index}`}
-                  x1={source.x}
-                  y1={source.y}
-                  x2={target.x}
-                  y2={target.y}
-                  className="graph-edge"
-                />
-              );
-            })}
-          </g>
-
-          <g className="node-layer">
-            {positionedNodes.map((node) => {
-              const isSelected = selectedNode?.id === node.id;
-
-              return (
-                <g
-                  key={node.id}
-                  className={`graph-node ${isSelected ? "selected" : ""}`}
-                  transform={`translate(${node.x} ${node.y})`}
-                  onClick={() => onSelectNode(node)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      onSelectNode(node);
-                    }
-                  }}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`Select ${node.id}`}
-                >
-                  <circle r={isSelected ? 20 : 16} fill={nodeColor(node.group)} />
-                  <text x="0" y="32" textAnchor="middle">
-                    {node.label}
-                  </text>
-                </g>
-              );
-            })}
-          </g>
-        </svg>
+            if (globalScale > 1 || isSelected) {
+              const label = node.label || node.id;
+              const fontSize = 12 / globalScale;
+              ctx.font = `${fontSize}px Sans-Serif`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillStyle = isSelected ? "#fbbf24" : 'rgba(255, 255, 255, 0.8)';
+              ctx.fillText(label, node.x, node.y + radius + fontSize + 2);
+            }
+          }}
+        />
       </div>
     </section>
   );

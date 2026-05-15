@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+from Memory.chunk_adapter import normalize_chunk
+
 
 REQUIRED_STRING_FIELDS = [
     "chunk_id",
@@ -46,12 +48,10 @@ def load_code_chunks(json_file_path: str) -> list[dict]:
         except json.JSONDecodeError as error:
             raise ValueError(f"Invalid JSON format: {error}")
 
-    validate_code_chunks(chunks)
-
-    return chunks
+    return validate_code_chunks(chunks)
 
 
-def validate_code_chunks(chunks: list[dict]) -> None:
+def validate_code_chunks(chunks: list[dict]) -> list[dict]:
     """
     Validates the structure of the code chunks list.
 
@@ -79,11 +79,15 @@ def validate_code_chunks(chunks: list[dict]) -> None:
     if not isinstance(chunks, list):
         raise ValueError("Invalid structure: root object must be a list.")
 
+    normalized_chunks = []
+
     for index, chunk in enumerate(chunks):
-        validate_single_chunk(chunk, index)
+        normalized_chunks.append(validate_single_chunk(chunk, index))
+
+    return normalized_chunks
 
 
-def validate_single_chunk(chunk: dict, index: int) -> None:
+def validate_single_chunk(chunk: dict, index: int) -> dict:
     """
     Validates a single code chunk.
     """
@@ -91,27 +95,34 @@ def validate_single_chunk(chunk: dict, index: int) -> None:
     if not isinstance(chunk, dict):
         raise ValueError(f"Invalid chunk at index {index}: each chunk must be an object.")
 
+    normalized_chunk = normalize_chunk(chunk, index + 1)
+
+    if normalized_chunk is None:
+        raise ValueError(f"Invalid chunk at index {index}: chunk cannot be normalized.")
+
     for field in REQUIRED_STRING_FIELDS:
-        if field not in chunk:
+        if field not in normalized_chunk:
             raise ValueError(f"Invalid chunk at index {index}: missing '{field}' field.")
 
-        if not isinstance(chunk[field], str):
+        if not isinstance(normalized_chunk[field], str):
             raise ValueError(f"Invalid chunk at index {index}: '{field}' must be a string.")
 
-        if chunk[field].strip() == "":
+        if normalized_chunk[field].strip() == "":
             raise ValueError(f"Invalid chunk at index {index}: '{field}' cannot be empty.")
 
     for field in REQUIRED_INT_FIELDS:
-        if field not in chunk:
+        if field not in normalized_chunk:
             raise ValueError(f"Invalid chunk at index {index}: missing '{field}' field.")
 
-        if not isinstance(chunk[field], int):
+        if not isinstance(normalized_chunk[field], int):
             raise ValueError(f"Invalid chunk at index {index}: '{field}' must be an integer.")
 
-    if chunk["start_line"] <= 0:
+    if normalized_chunk["start_line"] <= 0:
         raise ValueError(f"Invalid chunk at index {index}: 'start_line' must be positive.")
 
-    if chunk["end_line"] < chunk["start_line"]:
+    if normalized_chunk["end_line"] < normalized_chunk["start_line"]:
         raise ValueError(
             f"Invalid chunk at index {index}: 'end_line' must be greater than or equal to 'start_line'."
         )
+
+    return normalized_chunk
