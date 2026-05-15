@@ -66,7 +66,7 @@ export const useChatController = ({ structureJson, codeChunksJson, selectedNode 
 
         streamIterator = brainService.streamWithContext({
           prompt,
-          structureJson,
+          structureJson: [], // Only send code chunks, not the full repo map
           relevantContextJson,
         });
       } else {

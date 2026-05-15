@@ -23,16 +23,6 @@ const buildBlueprintFormData = ({ prompt, structureJson, relevantContextJson }) 
 };
 
 export const brainService = {
-  askGeneral: async (prompt) => {
-    return requestJson(buildBackendUrl(endpoints.generalChat), {
-      method: "POST",
-      body: JSON.stringify({
-        prompt,
-        ...defaultRoutingFields,
-      }),
-    });
-  },
-
   streamGeneral: async function* (prompt) {
     yield* streamSse(buildBackendUrl(`${endpoints.generalChat}/stream`), {
       method: "POST",
@@ -40,13 +30,6 @@ export const brainService = {
         prompt,
         ...defaultRoutingFields,
       }),
-    });
-  },
-
-  askWithContext: async ({ prompt, structureJson, relevantContextJson }) => {
-    return requestJson(buildBackendUrl(endpoints.blueprint), {
-      method: "POST",
-      body: buildBlueprintFormData({ prompt, structureJson, relevantContextJson }),
     });
   },
 
