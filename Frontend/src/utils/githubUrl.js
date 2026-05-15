@@ -26,8 +26,15 @@ export const validatePublicGitHubRepo = async (value) => {
     return parsed;
   }
 
+  const headers = { Accept: "application/vnd.github+json" };
+  const token = import.meta.env.VITE_GITHUB_TOKEN?.trim();
+  
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   const response = await fetch(`https://api.github.com/repos/${parsed.owner}/${parsed.repo}`, {
-    headers: { Accept: "application/vnd.github+json" },
+    headers,
   });
 
   if (response.status === 404) {

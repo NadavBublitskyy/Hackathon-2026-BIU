@@ -27,6 +27,8 @@ services:
       LLM_API_KEY: ${LLM_API_KEY:-}
       # Pass the OpenRouter API key into the container when it exists.
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      # Pass the GitHub Personal Access Token into the container.
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       # Pass the frontend origins allowed to call the backend.
       BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173}
     # Define host-to-container port mappings.
@@ -82,6 +84,8 @@ services:
         VITE_VIKI_CONTEXT_ENDPOINT: ${VITE_VIKI_CONTEXT_ENDPOINT:-/api/memory/retrieve}
         # Configure the prompt classification API path.
         VITE_PROMPT_CLASSIFY_ENDPOINT: ${VITE_PROMPT_CLASSIFY_ENDPOINT:-/api/prompt/classify}
+        # Pass the GitHub Personal Access Token for frontend validation.
+        VITE_GITHUB_TOKEN: ${VITE_GITHUB_TOKEN:-}
     # Define host-to-container port mappings.
     ports:
       # Expose container port 80 on the configured host frontend port.

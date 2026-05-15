@@ -1,7 +1,7 @@
 from typing import Optional
 
 
-SUPPORTED_EXTENSIONS = (".py", ".js", ".ts", ".tsx")
+SUPPORTED_EXTENSIONS = (".py", ".js", ".ts", ".tsx", ".java")
 INDEX_FILENAMES = tuple(f"index{extension}" for extension in SUPPORTED_EXTENSIONS)
 
 
@@ -32,6 +32,11 @@ def resolve_import(import_path: str, internal_file_paths: set[str]) -> Optional[
     for candidate in candidates:
         if candidate in normalized_files:
             return candidate
+
+    for candidate in candidates:
+        suffix_matches = [path for path in normalized_files if path.endswith(f"/{candidate}")]
+        if len(suffix_matches) == 1:
+            return suffix_matches[0]
 
     return None
 

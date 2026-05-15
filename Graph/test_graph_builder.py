@@ -222,6 +222,26 @@ def test_valid_internal_import_creates_edge_for_file_path_import():
     ]
 
 
+def test_java_internal_import_creates_edge_for_source_tree_path():
+    graph = build_graph(
+        {
+            "files": [
+                {"path": "src/main/Main.java", "imports": ["game.Game"]},
+                {"path": "src/game/Game.java"},
+                {"path": "src/geometry/Point.java"},
+            ]
+        }
+    )
+
+    assert graph["edges"] == [
+        {
+            "source": "src/main/Main.java",
+            "target": "src/game/Game.java",
+            "type": "import",
+        }
+    ]
+
+
 def test_import_dict_format_with_module_key_creates_edge():
     graph = build_graph(
         {
