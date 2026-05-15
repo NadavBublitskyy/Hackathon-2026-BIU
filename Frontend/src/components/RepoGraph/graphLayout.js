@@ -1,7 +1,7 @@
 import dagre from "dagre";
 
-const NODE_WIDTH = 190;
-const NODE_HEIGHT = 58;
+const NODE_WIDTH = 220;
+const NODE_HEIGHT = 68;
 
 const groupColor = (group) => {
   const palette = ["#2563eb", "#0f766e", "#b45309", "#7c3aed", "#be123c", "#15803d", "#4338ca"];
@@ -32,7 +32,7 @@ export function createReactFlowLayout(graphData, selectedNodeId) {
 
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
-  dagreGraph.setGraph({ rankdir: "LR", ranksep: 92, nodesep: 44, marginx: 28, marginy: 28 });
+  dagreGraph.setGraph({ rankdir: "TB", ranksep: 56, nodesep: 32, marginx: 24, marginy: 24 });
 
   backendNodes.forEach((node) => {
     dagreGraph.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
@@ -51,13 +51,17 @@ export function createReactFlowLayout(graphData, selectedNodeId) {
 
     return {
       id: node.id,
-      type: "default",
+      type: "fileNode",
       position: {
         x: position.x - NODE_WIDTH / 2,
         y: position.y - NODE_HEIGHT / 2,
       },
       data: {
         label: node.label || node.id,
+        fullLabel: node.id,
+        group: node.group || "root",
+        color,
+        isSelected,
         originalNode: {
           id: node.id,
           label: node.label || node.id,
@@ -66,14 +70,14 @@ export function createReactFlowLayout(graphData, selectedNodeId) {
       },
       style: {
         width: NODE_WIDTH,
-        minHeight: NODE_HEIGHT,
+        height: NODE_HEIGHT,
         borderColor: isSelected ? "#111827" : color,
         borderWidth: isSelected ? 3 : 2,
         borderRadius: 8,
-        background: "#ffffff",
+        background: isSelected ? "#f8fafc" : "#ffffff",
         boxShadow: isSelected
-          ? "0 12px 24px rgba(17, 24, 39, 0.18)"
-          : "0 8px 18px rgba(24, 33, 47, 0.10)",
+          ? "0 14px 30px rgba(17, 24, 39, 0.20)"
+          : "0 6px 14px rgba(24, 33, 47, 0.08)",
         color: "#18212f",
       },
     };
@@ -93,17 +97,27 @@ export function createReactFlowLayout(graphData, selectedNodeId) {
       id: edge.id || `${id}-${index}`,
       source: edge.source,
       target: edge.target,
-      animated: edge.type === "import",
+      animated: false,
       type: "smoothstep",
       markerEnd: {
         type: "arrowclosed",
+        width: 16,
+        height: 16,
+        color: "#94a3b8",
       },
       style: {
-        stroke: "#8391a5",
-        strokeWidth: 1.6,
+        stroke: "#94a3b8",
+        strokeWidth: 1.35,
       },
     });
   });
 
-  return { nodes, edges };
+  const graphSize = dagreGraph.graph();
+
+  return {
+    nodes,
+    edges,
+    width: Math.max((graphSize?.width || 0) + 96, 960),
+    height: Math.max((graphSize?.height || 0) + 96, 720),
+  };
 }

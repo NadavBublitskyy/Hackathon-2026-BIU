@@ -490,17 +490,92 @@ button:disabled {
 
 .repo-flow-canvas {
   position: relative;
-  min-height: 700px;
+  height: min(72vh, 860px);
+  min-height: 620px;
   padding: 0;
+  overflow: auto;
 }
 
-.repo-flow-canvas .react-flow {
-  min-height: 700px;
+.repo-flow-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.repo-flow-stage .react-flow {
+  min-height: inherit;
   background: #fbfcfe;
 }
 
 .repo-flow-canvas .react-flow__node {
-  font-size: 12px;
+  font-size: 13px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.repo-flow-node {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: 6px minmax(0, 1fr);
+  align-items: stretch;
+  background: transparent;
+}
+
+.repo-flow-node-accent {
+  width: 6px;
+}
+
+.repo-flow-node-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 12px;
+}
+
+.repo-flow-node-copy span,
+.repo-flow-node-copy small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repo-flow-node-copy span {
+  color: #18212f;
+  font-size: 14px;
+  line-height: 1.2;
+  font-weight: 800;
+}
+
+.repo-flow-node-copy small {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.repo-flow-node.selected .repo-flow-node-copy span {
+  color: #111827;
+}
+
+.repo-flow-handle {
+  width: 1px;
+  height: 1px;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.repo-flow-canvas .react-flow__edge-path {
+  stroke-linecap: round;
+}
+
+.repo-flow-canvas .react-flow__controls {
+  box-shadow: 0 8px 18px rgba(24, 33, 47, 0.10);
 }
 
 .repo-flow-empty {
