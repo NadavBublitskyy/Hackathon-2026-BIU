@@ -33,32 +33,6 @@ def build_blueprint_messages(prompt: str, structure_data: Any, relevant_context_
     return messages
 
 
-# Generate a context-aware repo answer with the configured default model.
-async def answer_blueprint(prompt: str, structure_data: Any, relevant_context_data: Any) -> dict[str, Any]:
-    # Build and log the context-aware messages.
-    messages = build_blueprint_messages(prompt, structure_data, relevant_context_data, "Generated context-aware prompt")
-    # Send the assembled context-aware messages to the LLM with hardcoded settings.
-    result = await get_llm_connector().send_messages(messages=messages, temperature=0.2, max_tokens=1200)
-    # Verify that every file path mentioned by the LLM exists in structure.json.
-    paths_verified = CodeAttributionVerifier.verify_response_paths(structure_data, result.message)
-    # Return the LLM response text and the grounding verification result.
-    return {"response": result.message, "paths_verified": paths_verified}
-
-
-# Generate a context-aware repo answer after dynamically choosing the answer model.
-async def answer_routed_blueprint(prompt: str, structure_data: Any, relevant_context_data: Any, light_model_name: str, heavy_model_name: str, classifier_model_name: str, fallback_model_name: str | None = None) -> dict[str, Any]:
-    # Build and log the context-aware messages.
-    messages = build_blueprint_messages(prompt, structure_data, relevant_context_data, "Generated routed context-aware prompt")
-    # Ask MatchModel to choose between the caller-provided light and heavy model names.
-    route = await route_prompt_to_model(prompt, light_model_name, heavy_model_name, classifier_model_name)
-    # Use the light model as the default fallback when the heavy model fails.
-    fallback_answer_model = fallback_model_name or (light_model_name if route.selected_model == heavy_model_name else None)
-    # Send the assembled context-aware messages to the selected answer model.
-    result, answered_by_model, fallback_used = await send_messages_with_model_fallback(messages=messages, selected_model=route.selected_model, fallback_model_name=fallback_answer_model, max_tokens=1200)
-    # Verify that every file path mentioned by the LLM exists in structure.json.
-    paths_verified = CodeAttributionVerifier.verify_response_paths(structure_data, result.message)
-    # Return the answer plus compact routing and grounding metadata.
-    return routed_response_payload(result, route, answered_by_model, fallback_used, extra={"paths_verified": paths_verified})
 
 
 # Build route metadata for context-aware streaming without dynamic routing.
