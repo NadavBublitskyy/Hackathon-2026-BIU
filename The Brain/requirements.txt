@@ -12,3 +12,9 @@ python-multipart==0.0.20
 uvicorn[standard]==0.34.0
 # ChromaDB stores and retrieves Memory code chunk embeddings locally.
 chromadb
+# PyGithub powers the Milestone 1 public GitHub ingestor.
+PyGithub==2.5.0
+# python-dotenv lets the Milestone 1 ingestor read an optional GitHub token.
+python-dotenv==1.0.1
+# NetworkX powers the Milestone 3 graph builder.
+networkx==3.4.2

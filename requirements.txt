@@ -2,3 +2,5 @@ networkx>=3.0
 chromadb
 fastapi
 uvicorn[standard]
+PyGithub==2.5.0
+python-dotenv==1.0.1

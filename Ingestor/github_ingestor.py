@@ -3,7 +3,7 @@ import re
 import base64
 from dotenv import load_dotenv
 from github import Github, GithubException
-from file_filter import FileFilter
+from Ingestor.file_filter import FileFilter
 
 load_dotenv()
 
