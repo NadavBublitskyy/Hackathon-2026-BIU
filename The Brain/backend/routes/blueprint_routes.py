@@ -6,7 +6,7 @@ from __future__ import annotations
 # Import Any so JSON response payloads can be typed.
 from typing import Any
 
-# Import FastAPI tools for route registration, uploads, form fields, and controlled HTTP errors.
+# Import FastAPI tools for route registration, uploads, form fields, and controlled HTTP errors..
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 # Import StreamingResponse so blueprint answers can stream over SSE.
 from fastapi.responses import StreamingResponse
