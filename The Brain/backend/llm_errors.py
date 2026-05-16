@@ -17,3 +17,9 @@ class LLMConfigError(LLMError):
 class LLMAuthError(LLMError):
     # Keep this class empty so callers can translate auth failures into HTTP 401.
     pass
+
+
+# Define the exception type for provider rate-limit responses (HTTP 429).
+# A 429 proves the key is valid — the provider just needs time to recover.
+class LLMRateLimitError(LLMError):
+    pass

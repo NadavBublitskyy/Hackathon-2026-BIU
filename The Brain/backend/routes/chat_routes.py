@@ -12,6 +12,8 @@ from fastapi.responses import StreamingResponse
 from backend.llm_errors import LLMAuthError, LLMConfigError, LLMError
 # Import request schemas for chat endpoints.
 from backend.schemas import ChatRequest, RoutedChatRequest
+# Import settings so model names resolve from LLM_MODEL_NAME when not provided.
+from backend.config import get_settings
 # Import chat service functions that own business logic.
 from backend.services.chat_service import build_routed_chat_stream
 # Import SSE helpers for streaming responses.
@@ -32,10 +34,14 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
 # Register the dynamic model routed streaming chat endpoint.
 @router.post("/api/chat/routed/stream")
 async def chat_routed_stream(request: RoutedChatRequest) -> StreamingResponse:
+    # Resolve model names from settings when the caller did not supply them.
+    configured_model = get_settings().llm_model_name
+    light = request.light_model_name or configured_model
+    heavy = request.heavy_model_name or configured_model
     # Convert routing errors into clear HTTP responses before the stream starts.
     try:
         # Build messages, selected model, and start metadata for routed streaming.
-        messages, selected_model, start_data = await build_routed_chat_stream(request.prompt, request.light_model_name, request.heavy_model_name, request.classifier_model_name)
+        messages, selected_model, start_data = await build_routed_chat_stream(request.prompt, light, heavy, request.classifier_model_name)
     # Convert provider 401 errors into a frontend-clear response.
     except LLMAuthError as exc:
         # Raise a 401 response without exposing the key.

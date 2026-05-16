@@ -22,7 +22,7 @@ import httpx
 # Import settings helpers from the dedicated configuration module.
 from backend.config import Settings, get_settings
 # Import shared LLM exceptions from the dedicated error module.
-from backend.llm_errors import LLMAuthError, LLMConfigError, LLMError
+from backend.llm_errors import LLMAuthError, LLMConfigError, LLMError, LLMRateLimitError
 
 # Create a module logger so this file can report LLM setup results.
 logger = logging.getLogger(__name__)
@@ -74,18 +74,16 @@ class LLMConnector:
         # Return the provider headers used on every request.
         return {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "X-Title": self.settings.app_name}
 
-    # Ping the provider once so startup can confirm the key and network are working.
+    # Validate configuration at startup without making an API call.
+    # Reasoning models can generate very long internal traces even for max_tokens=1,
+    # causing the startup ping to hang indefinitely. Real errors surface on the first query.
     async def initialize(self) -> None:
-        # Avoid a second ping when the connector is already initialized.
         if self._initialized:
-            # End early because initialization already happened.
             return
-        # Send a tiny request to validate provider connectivity.
-        await self.send_messages(messages=[{"role": "user", "content": "ping"}], temperature=0, max_tokens=1)
-        # Mark the connector as initialized after a successful ping.
+        if not self.settings.api_key_value:
+            raise LLMConfigError("LLM_API_KEY or OPENROUTER_API_KEY is not configured.")
         self._initialized = True
-        # Log the required startup success message.
-        logger.info("LLM Client Initialized")
+        logger.info("LLM Client Initialized (model=%s)", self.settings.llm_model_name)
 
     # Close the async HTTP client during FastAPI shutdown.
     async def close(self) -> None:
@@ -159,8 +157,11 @@ class LLMConnector:
             return
         # Read the response body so provider error details are not lost.
         body = (await response.aread()).decode("utf-8", errors="replace")
-        # Treat rate limits and server errors as temporary provider failures.
-        if response.status_code == 429 or response.status_code >= 500:
+        # Treat rate limits as a distinct error so startup can handle them gracefully.
+        if response.status_code == 429:
+            raise LLMRateLimitError(f"LLM provider rate-limited ({response.status_code}).")
+        # Treat server errors as temporary provider failures.
+        if response.status_code >= 500:
             # Raise a retryable LLM error.
             raise LLMError(f"LLM provider temporarily unavailable ({response.status_code}).")
         # Extract a readable provider error message.
@@ -219,7 +220,9 @@ class LLMConnector:
                 return self._handle_response(response)
             # Do not retry invalid API keys because retrying cannot fix credentials.
             except LLMAuthError:
-                # Re-raise the auth error exactly as-is.
+                raise
+            # Do not retry rate limits — waiting between retries would not help a free-tier cap.
+            except LLMRateLimitError:
                 raise
             # Retry timeouts and network failures while attempts remain.
             except (httpx.TimeoutException, httpx.NetworkError) as exc:
@@ -246,8 +249,11 @@ class LLMConnector:
         if response.status_code == 401:
             # Raise the auth-specific error used by API routes.
             raise LLMAuthError("Invalid API Key")
-        # Treat rate limits and server errors as temporary provider failures.
-        if response.status_code == 429 or response.status_code >= 500:
+        # Treat rate limits as a distinct error so startup can handle them gracefully.
+        if response.status_code == 429:
+            raise LLMRateLimitError(f"LLM provider rate-limited ({response.status_code}).")
+        # Treat server errors as temporary provider failures.
+        if response.status_code >= 500:
             # Raise a retryable LLM error.
             raise LLMError(f"LLM provider temporarily unavailable ({response.status_code}).")
         # Treat other 4xx responses as rejected requests.
@@ -400,6 +406,12 @@ async def setup_llm_connection() -> LLMStatus:
         _status.error = "Invalid API Key"
         # Log the auth failure without printing the key.
         logger.error("LLM setup failed: Invalid API Key")
+    # A 429 during the startup ping means the key is valid but the free tier is throttling us.
+    # Mark as ready so the app starts — the first real query will succeed once the window resets.
+    except LLMRateLimitError:
+        _status.ready = True
+        _status.error = None
+        logger.warning("LLM startup ping rate-limited; key is valid — proceeding as ready.")
     # Convert configuration and provider failures into a stable status message.
     except (LLMConfigError, LLMError) as exc:
         # Mark the LLM as not ready.

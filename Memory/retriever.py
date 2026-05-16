@@ -3,6 +3,15 @@ import chromadb
 
 DEFAULT_PERSIST_DIRECTORY = "Memory/chroma_db"
 DEFAULT_COLLECTION_NAME = "code_chunks"
+_N_RESULTS_CAP = 30
+
+_clients: dict[str, chromadb.PersistentClient] = {}
+
+
+def _get_chroma_client(path: str) -> chromadb.PersistentClient:
+    if path not in _clients:
+        _clients[path] = chromadb.PersistentClient(path=path)
+    return _clients[path]
 
 
 def get_collection_state(
@@ -13,7 +22,7 @@ def get_collection_state(
     Returns collection metadata without running an embedding query.
     """
 
-    client = chromadb.PersistentClient(path=persist_directory)
+    client = _get_chroma_client(persist_directory)
 
     try:
         collection = client.get_collection(name=collection_name)
@@ -134,7 +143,7 @@ def retrieve_snippets(
     if min_score < 0:
         raise ValueError("min_score cannot be negative.")
 
-    client = chromadb.PersistentClient(path=persist_directory)
+    client = _get_chroma_client(persist_directory)
 
     try:
         collection = client.get_collection(name=collection_name)
@@ -151,7 +160,7 @@ def retrieve_snippets(
 
     results = collection.query(
         query_texts=[query],
-        n_results=indexed_chunks_count,
+        n_results=min(_N_RESULTS_CAP, indexed_chunks_count),
         include=["documents", "metadatas", "distances"],
     )
 
