@@ -9,14 +9,14 @@ from Ingestor.project_analyzer import ProjectAnalyzer
 
 def ingest_repo(github_url: str) -> dict[str, Any]:
     ingestor = GitHubIngestor()
-    repo_data = ingestor.get_repository_files(github_url)
+    repo_data = ingestor.download_repository_zip(github_url)
 
     if "error" in repo_data:
         raise ValueError(repo_data["error"])
 
     files = repo_data.get("files", [])
+    contents = {f["path"]: f["content"] for f in files if f.get("content") is not None}
     analyzer = ProjectAnalyzer(files)
-    contents = _fetch_contents(ingestor, repo_data["owner"], repo_data["repo"], files)
 
     structure_json = _build_structure_json(repo_data["repo"], files, contents, analyzer)
     code_chunks_json = build_code_chunks_json(contents)
@@ -25,22 +25,6 @@ def ingest_repo(github_url: str) -> dict[str, Any]:
         "structure_json": structure_json,
         "code_chunks_json": code_chunks_json,
     }
-
-
-def _fetch_contents(ingestor: GitHubIngestor, owner: str, repo_name: str, files: list[dict[str, Any]]) -> dict[str, str]:
-    contents = {}
-
-    for file_data in files:
-        path = file_data.get("path")
-        sha = file_data.get("sha")
-        if not path or not sha:
-            continue
-
-        content = ingestor.get_file_content(owner, repo_name, sha)
-        if content is not None:
-            contents[path] = content
-
-    return contents
 
 
 def _build_structure_json(repo_name: str, files: list[dict[str, Any]], contents: dict[str, str], analyzer: ProjectAnalyzer) -> dict[str, Any]:

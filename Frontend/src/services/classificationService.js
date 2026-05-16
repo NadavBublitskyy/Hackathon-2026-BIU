@@ -23,7 +23,6 @@ export const classificationService = {
         prompt,
         selected_file_path: selectedNode?.id || null,
         retrieved_context: toClassifierContext(retrievedContextJson),
-        classifier_model_name: "openai/gpt-4o-mini",
       }),
     });
   },

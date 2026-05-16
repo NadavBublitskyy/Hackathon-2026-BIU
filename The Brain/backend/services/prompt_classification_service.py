@@ -69,7 +69,10 @@ You are a high-precision intent classifier for a repository explorer. Categorize
 - Do not explain. Do not use punctuation. Do not use quotes.
 """.strip()
 
-# Define a short timeout so classification cannot make the UI feel stuck.
+# Skip the remote classifier and always use the local keyword heuristic.
+# Set to False to re-enable LLM-based classification when a paid API key is available.
+_FORCE_LOCAL_CLASSIFICATION = True
+# Kept for compatibility; unused while _FORCE_LOCAL_CLASSIFICATION is True.
 CLASSIFICATION_TIMEOUT_SECONDS = 4.0
 
 # Minimum Memory relevance score that makes a query specific-code.
@@ -101,6 +104,10 @@ class PromptClassificationResult:
 async def classify_prompt(prompt: str, selected_file_path: str | None, classifier_model_name: str, retrieved_context: list[dict[str, Any]] | None = None) -> PromptClassificationResult:
     # Normalize optional retrieved context once.
     context_candidates = normalize_retrieved_context(retrieved_context)
+    # When the local-only flag is set, skip the API call entirely.
+    if _FORCE_LOCAL_CLASSIFICATION:
+        classifier_category = classify_prompt_locally(prompt, selected_file_path, context_candidates)
+        return build_result(classifier_category, classifier_model_name, "LOCAL_ONLY", True, "Remote classifier disabled.")
     # Build the strict OpenAI-compatible messages for classification.
     messages = build_classifier_messages(prompt, selected_file_path, context_candidates)
     # Try the cheap LLM classifier first.

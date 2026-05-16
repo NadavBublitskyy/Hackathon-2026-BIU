@@ -14,8 +14,11 @@ from typing import Any
 
 
 # Define the default cheap model used only for intent classification.
-DEFAULT_CLASSIFIER_MODEL_NAME = "openai/gpt-4o-mini"
-# Define the maximum classifier wait with margin below the 500ms acceptance limit.
+DEFAULT_CLASSIFIER_MODEL_NAME = "google/gemini-2.5-flash:free"
+# Skip the remote classifier entirely and use the local keyword heuristic.
+# Set to False to re-enable LLM-based routing when a paid API key is available.
+_FORCE_LOCAL_CLASSIFIER = True
+# Kept for compatibility; unused while _FORCE_LOCAL_CLASSIFIER is True.
 DEFAULT_CLASSIFICATION_TIMEOUT_SECONDS = 0.4
 
 
@@ -74,10 +77,16 @@ class MatchModel:
     async def choose_model(self, user_prompt: str, light_model_name: str, heavy_model_name: str, classifier_model_name: str | None = None) -> MatchModelResult:
         # Choose the classifier model override when the API caller provides one.
         classifier_model = classifier_model_name or self.classifier_model_name
-        # Build the strict prompt that forces the classifier to choose only one model name.
-        messages = self.build_classifier_messages(user_prompt, light_model_name, heavy_model_name)
         # Start measuring routing overhead.
         started_at = time.perf_counter()
+        # When the local-only flag is set, skip the remote API call entirely.
+        if _FORCE_LOCAL_CLASSIFIER:
+            selected_model = self.classify_locally(user_prompt, light_model_name, heavy_model_name)
+            classification_ms = (time.perf_counter() - started_at) * 1000
+            difficulty = self.difficulty_for_model(selected_model, light_model_name, heavy_model_name)
+            return MatchModelResult(selected_model=selected_model, difficulty=difficulty, classifier_model=classifier_model, raw_classifier_response="LOCAL_ONLY", classification_ms=classification_ms, used_local_fallback=True)
+        # Build the strict prompt that forces the classifier to choose only one model name.
+        messages = self.build_classifier_messages(user_prompt, light_model_name, heavy_model_name)
         # Prepare the raw classifier response for debugging.
         raw_response = ""
         # Track whether local keyword routing was needed.
@@ -92,23 +101,16 @@ class MatchModel:
             selected_model = self.parse_classifier_response(raw_response, light_model_name, heavy_model_name)
             # Fall back locally when the classifier ignored the strict output contract.
             if selected_model is None:
-                # Mark that the local heuristic decided the model.
                 used_local_fallback = True
-                # Use deterministic keywords so the request can still continue.
                 selected_model = self.classify_locally(user_prompt, light_model_name, heavy_model_name)
         # Fall back locally when the classifier model is unavailable or too slow.
         except Exception as exc:
-            # Keep a safe debug marker without exposing secrets.
             raw_response = f"LOCAL_FALLBACK: {exc.__class__.__name__}"
-            # Mark that local keyword routing decided the model.
             used_local_fallback = True
-            # Use deterministic keywords so the request can still continue.
             selected_model = self.classify_locally(user_prompt, light_model_name, heavy_model_name)
         # Stop measuring routing overhead.
         classification_ms = (time.perf_counter() - started_at) * 1000
-        # Convert the selected model into a simple difficulty label.
         difficulty = self.difficulty_for_model(selected_model, light_model_name, heavy_model_name)
-        # Return the full routing result.
         return MatchModelResult(selected_model=selected_model, difficulty=difficulty, classifier_model=classifier_model, raw_classifier_response=raw_response.strip(), classification_ms=classification_ms, used_local_fallback=used_local_fallback)
 
     # Build the strict messages sent to the cheap classifier model.

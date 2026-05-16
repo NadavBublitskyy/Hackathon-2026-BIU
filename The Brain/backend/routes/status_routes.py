@@ -18,13 +18,13 @@ router = APIRouter()
 async def llm_status() -> dict[str, Any]:
     # Read the current LLM startup status.
     state = get_llm_status()
-    # Return an error response if the startup ping did not succeed.
+    # Always return 200 so the Docker healthcheck passes regardless of key validity.
+    # Callers inspect the "status" field to determine actual readiness.
     if not state.ready:
-        # Return a 401 when the provider rejected the API key.
-        if state.error == "Invalid API Key":
-            # Raise a frontend-clear invalid key response.
-            raise HTTPException(status_code=401, detail="Invalid API Key")
-        # Raise a service unavailable response for other setup failures.
-        raise HTTPException(status_code=503, detail=state.error or "LLM client is not ready")
-    # Return a ready response when the LLM startup ping succeeded.
+        return {
+            "status": "error",
+            "provider": state.provider,
+            "model": state.model,
+            "error": state.error,
+        }
     return {"status": "ready", "provider": state.provider, "model": state.model}

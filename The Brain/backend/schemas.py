@@ -9,12 +9,6 @@ from pydantic import BaseModel, Field
 # Import the default classifier model from the router implementation.
 from backend.orchestrator.match_model import DEFAULT_CLASSIFIER_MODEL_NAME
 
-# Define the default fast model suggestion for routed requests.
-DEFAULT_LIGHT_MODEL_NAME = "meta-llama/llama-3-8b-instruct"
-# Define the default stronger model suggestion for routed requests.
-DEFAULT_HEAVY_MODEL_NAME = "openai/gpt-4o"
-
-
 # Define the request body accepted by /api/chat.
 class ChatRequest(BaseModel):
     # Store only the user's prompt so the Swagger form stays simple.
@@ -25,10 +19,10 @@ class ChatRequest(BaseModel):
 class RoutedChatRequest(BaseModel):
     # Store the user's prompt that should be routed and answered.
     prompt: str = Field(min_length=1)
-    # Store the cheap model name that should answer easy navigation questions.
-    light_model_name: str = Field(default=DEFAULT_LIGHT_MODEL_NAME, min_length=1)
-    # Store the stronger model name that should answer hard reasoning questions.
-    heavy_model_name: str = Field(default=DEFAULT_HEAVY_MODEL_NAME, min_length=1)
+    # Omit to let the backend resolve from LLM_MODEL_NAME; provide to override.
+    light_model_name: str | None = Field(default=None)
+    # Omit to let the backend resolve from LLM_MODEL_NAME; provide to override.
+    heavy_model_name: str | None = Field(default=None)
     # Store the cheap classifier model that decides between the light and heavy models.
     classifier_model_name: str = Field(default=DEFAULT_CLASSIFIER_MODEL_NAME, min_length=1)
     # Store an optional fallback model for final answer generation if the selected model fails.

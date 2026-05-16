@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     # Store the provider base URL and allow either LLM_BASE_URL or OPENROUTER_BASE_URL to set it.
     llm_base_url: str = Field(default="https://openrouter.ai/api/v1", validation_alias=AliasChoices("LLM_BASE_URL", "OPENROUTER_BASE_URL"))
     # Store the model name and allow either LLM_MODEL_NAME or LLM_MODEL to set it.
-    llm_model_name: str = Field(default="openrouter/auto", validation_alias=AliasChoices("LLM_MODEL_NAME", "LLM_MODEL"))
+    llm_model_name: str = Field(default="google/gemini-flash-1.5", validation_alias=AliasChoices("LLM_MODEL_NAME", "LLM_MODEL"))
     # Store a generic secret API key when LLM_API_KEY is used.
     llm_api_key: SecretStr | None = Field(default=None, validation_alias="LLM_API_KEY")
     # Store the OpenRouter-specific secret API key when OPENROUTER_API_KEY is used.

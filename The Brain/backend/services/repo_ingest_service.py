@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Callable
 
 from Graph.graph_builder import build_graph
@@ -9,7 +10,7 @@ from Ingestor import ingest_repo
 
 
 async def ingest_public_repo(github_url: str, on_code_chunks_ready: Callable | None = None) -> dict[str, Any]:
-    milestone_payload = ingest_repo(github_url)
+    milestone_payload = await asyncio.to_thread(ingest_repo, github_url)
     structure_json = milestone_payload["structure_json"]
     code_chunks_json = milestone_payload["code_chunks_json"]
     graph_data = build_graph(structure_json)
