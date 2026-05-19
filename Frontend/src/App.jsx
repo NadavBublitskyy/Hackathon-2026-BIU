@@ -11,8 +11,7 @@ import { useRepoSession } from "./hooks/useRepoSession";
 export default function App() {
   const repoSession = useRepoSession();
   const chatController = useChatController({
-    structureJson: repoSession.structureJson,
-    codeChunksJson: repoSession.codeChunksJson,
+    repoSessionId: repoSession.repoSessionId,
     selectedNode: repoSession.selectedNode,
   });
 
@@ -58,6 +57,7 @@ export default function App() {
               selectedNode={repoSession.selectedNode}
               onAsk={chatController.askQuestion}
               onClear={chatController.clearMessages}
+              onClearNode={() => repoSession.setSelectedNode(null)}
             />
           }
           rightPanel={

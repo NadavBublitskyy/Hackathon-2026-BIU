@@ -35,13 +35,11 @@ class RepoIngestServiceTests(unittest.IsolatedAsyncioTestCase):
         mock_ingest.assert_called_once_with("https://github.com/owner/repo")
         mock_build_graph.assert_called_once_with(structure_json)
         self.assertEqual(
-            result,
-            {
-                "structure_json": structure_json,
-                "code_chunks_json": code_chunks_json,
-                "graph_data": graph_data,
-            },
+            {key: result[key] for key in ("structure_json", "code_chunks_json", "graph_data")},
+            {"structure_json": structure_json, "code_chunks_json": code_chunks_json, "graph_data": graph_data},
         )
+        self.assertEqual(result["repo_identity"]["project_name"], "repo")
+        self.assertIn("repo", result["repo_identity"]["identity_sentence"])
         self.assertFalse(hasattr(repo_ingest_service, "build_graph_data"))
 
     async def test_ingest_public_repo_returns_graph_edges_for_internal_imports(self):

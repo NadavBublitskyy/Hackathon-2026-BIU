@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import ReactFlow, { Background, Controls, Handle, MiniMap, Position } from "reactflow";
 import "reactflow/dist/style.css";
 import { createReactFlowLayout } from "./graphLayout";
-
+//d
 function FileNode({ data }) {
   return (
     <div className={`repo-flow-node ${data.isSelected ? "selected" : ""}`} title={data.fullLabel || data.label}>
@@ -84,10 +84,10 @@ export function RepoGraphFlow({ graphData, selectedNode, onSelectNode }) {
       <div className="graph-canvas repo-flow-canvas">
         {nodes.length ? (
           <>
-          <div className="repo-flow-stage" style={{ minWidth: width, minHeight: height }}>
-            {renderGraph(false)}
-          </div>
-          <div className="repo-flow-hint">Use Expand graph for large repositories.</div>
+            <div className="repo-flow-stage" style={{ minWidth: width, minHeight: height }}>
+              {renderGraph(false)}
+            </div>
+            <div className="repo-flow-hint">Use Expand graph for large repositories.</div>
           </>
         ) : (
           <div className="repo-flow-empty">No dependency graph data yet.</div>

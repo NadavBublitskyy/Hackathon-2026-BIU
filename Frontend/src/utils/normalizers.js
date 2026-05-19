@@ -2,12 +2,14 @@ export const normalizeIngestResponse = (payload) => {
   const structureJson = payload?.structure_json || payload?.structureJson || payload?.structure || payload?.files_structure;
   const codeChunksJson = payload?.code_chunks_json || payload?.codeChunksJson || payload?.code_chunks || payload?.codeChunks || payload?.chunks;
   const graphData = payload?.graph_data || payload?.graphData || payload?.graph || null;
+  const repoSessionId = payload?.repo_session_id || payload?.repoSessionId || null;
 
-  if (!structureJson || !codeChunksJson) {
-    throw new Error("Ingest response must include structure_json and code_chunks_json.");
+  if (!repoSessionId && (!structureJson || !codeChunksJson)) {
+    throw new Error("Ingest response must include repo_session_id or structure_json and code_chunks_json.");
   }
 
   return {
+    repoSessionId,
     structureJson,
     codeChunksJson,
     graphData,

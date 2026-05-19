@@ -3,7 +3,7 @@ import { useState } from "react";
 import { RouteBadge } from "../RouteBadge/RouteBadge";
 import { questionCategories } from "../../utils/questionClassifier";
 
-export function PromptComposer({ disabled, selectedNode, onAsk }) {
+export function PromptComposer({ disabled, selectedNode, onAsk, onClearNode }) {
   const [prompt, setPrompt] = useState("");
   const route = prompt.trim() ? { category: questionCategories.PENDING, label: "LLM route" } : null;
   const canSend = prompt.trim() && !disabled;
@@ -31,7 +31,9 @@ export function PromptComposer({ disabled, selectedNode, onAsk }) {
       {selectedNode ? (
         <div className="selected-context">
           <span>{selectedNode.id}</span>
-          <X size={14} aria-hidden="true" />
+          <button type="button" onClick={onClearNode} style={{ background: "none", padding: 0, display: "flex", alignItems: "center", color: "inherit" }}>
+            <X size={14} aria-label="Clear selected file" />
+          </button>
         </div>
       ) : null}
 

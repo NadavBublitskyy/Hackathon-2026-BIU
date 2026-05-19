@@ -21,6 +21,8 @@ from backend.config import get_settings
 from backend.services.blueprint_service import build_blueprint_stream, build_routed_blueprint_stream
 # Import JSON upload parsing from its dedicated service.
 from backend.services.json_upload_service import read_json_upload
+# Import persisted repo-session helpers.
+from backend.services.repo_session_store import load_structure_json
 # Import SSE helpers for streaming responses.
 from backend.services.streaming_service import make_sse_response, stream_llm_response
 
@@ -31,9 +33,14 @@ router = APIRouter()
 
 # Register the streaming context-aware blueprint endpoint.
 @router.post("/api/blueprint/stream")
-async def blueprint_stream(prompt: str = Form(..., min_length=1), structure_json: UploadFile = File(...), relevant_context_json: UploadFile = File(...)) -> StreamingResponse:
-    # Parse the uploaded structure.json file.
-    structure_data = await read_json_upload(structure_json)
+async def blueprint_stream(
+    prompt: str = Form(..., min_length=1),
+    structure_json: UploadFile | None = File(None),
+    relevant_context_json: UploadFile = File(...),
+    repo_session_id: str | None = Form(None),
+    context_scope: str | None = Form(None),
+) -> StreamingResponse:
+    structure_data = await resolve_structure_data(structure_json, repo_session_id, context_scope)
     # Parse the uploaded relevant_context JSON file.
     relevant_context_data = await read_json_upload(relevant_context_json)
     # Build the exact message payload sent to the LLM.
@@ -46,14 +53,15 @@ async def blueprint_stream(prompt: str = Form(..., min_length=1), structure_json
 @router.post("/api/blueprint/routed/stream")
 async def blueprint_routed_stream(
     prompt: str = Form(..., min_length=1),
-    structure_json: UploadFile = File(...),
+    structure_json: UploadFile | None = File(None),
     relevant_context_json: UploadFile = File(...),
+    repo_session_id: str | None = Form(None),
+    context_scope: str | None = Form(None),
     light_model_name: str | None = Form(None),
     heavy_model_name: str | None = Form(None),
     classifier_model_name: str = Form(DEFAULT_CLASSIFIER_MODEL_NAME, min_length=1),
 ) -> StreamingResponse:
-    # Parse the uploaded structure.json file.
-    structure_data = await read_json_upload(structure_json)
+    structure_data = await resolve_structure_data(structure_json, repo_session_id, context_scope)
     # Parse the uploaded relevant_context JSON file.
     relevant_context_data = await read_json_upload(relevant_context_json)
     # Resolve model names from settings when the caller did not supply them.
@@ -78,3 +86,16 @@ async def blueprint_routed_stream(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     # Return the SSE stream using the selected model.
     return make_sse_response(stream_llm_response(messages=messages, max_tokens=1200, model_name=selected_model, start_data=start_data))
+
+
+async def resolve_structure_data(structure_json: UploadFile | None, repo_session_id: str | None, context_scope: str | None) -> Any:
+    if repo_session_id and context_scope == "repo_wide":
+        try:
+            return load_structure_json(repo_session_id)
+        except (FileNotFoundError, ValueError) as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    if structure_json is not None:
+        return await read_json_upload(structure_json)
+
+    return []

@@ -27,6 +27,8 @@ class RoutedChatRequest(BaseModel):
     classifier_model_name: str = Field(default=DEFAULT_CLASSIFIER_MODEL_NAME, min_length=1)
     # Store an optional fallback model for final answer generation if the selected model fails.
     fallback_model_name: str | None = Field(default=None)
+    # Store the backend repo session used by callers that need repo-aware routing.
+    repo_session_id: str | None = Field(default=None)
 
 
 # Define the request body accepted by /api/ingest.
@@ -43,6 +45,10 @@ class MemoryRetrieveRequest(BaseModel):
     prompt: str | None = Field(default=None)
     # Store an optional selected graph file path for focused retrieval.
     selected_file_path: str | None = Field(default=None)
+    # Store the backend repo session id whose persisted artifacts should be used.
+    repo_session_id: str | None = Field(default=None)
+    # Store the post-classification context scope, such as specific_code or repo_wide.
+    context_scope: str | None = Field(default=None)
     # Store the structure JSON produced by /api/ingest.
     structure_json: dict | None = Field(default=None)
     # Store the code chunks JSON produced by /api/ingest.
@@ -57,7 +63,9 @@ class PromptClassifyRequest(BaseModel):
     prompt: str = Field(min_length=1)
     # Store an optional selected file path from the graph.
     selected_file_path: str | None = Field(default=None)
-    # Store lightweight Memory candidates so classification can be biased by repo evidence.
+    # Store the backend repo session id used for repo-relevance override checks.
+    repo_session_id: str | None = Field(default=None)
+    # Kept for backward compatibility; the LLM classifier ignores snippets and routes from prompt/selection only.
     retrieved_context: list[dict] = Field(default_factory=list)
     # Store the cheap classifier model used for the category decision.
     classifier_model_name: str = Field(default=DEFAULT_CLASSIFIER_MODEL_NAME, min_length=1)

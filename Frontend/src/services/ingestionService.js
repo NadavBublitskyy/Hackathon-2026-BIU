@@ -14,7 +14,7 @@ export const ingestionService = {
     const graphData = normalized.graphData ? normalizeGraphData(normalized.graphData) : buildGraphFromStructure(normalized.structureJson);
 
     return {
-      ...normalized,
+      repoSessionId: normalized.repoSessionId,
       graphData,
     };
   },

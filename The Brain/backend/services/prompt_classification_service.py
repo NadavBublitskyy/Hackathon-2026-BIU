@@ -1,451 +1,492 @@
 """This file owns LLM-based prompt category classification for frontend routing."""
 
-# Enable Python 3.10-style type annotations when local tools run on Python 3.9.
 from __future__ import annotations
 
-# Import asyncio so the classifier call can be bounded by a timeout..
 import asyncio
-# Import re so fallback classification can detect code-specific language.
 import re
-# Import dataclass so classification results can be returned clearly.
 from dataclasses import dataclass
-# Import Any so retrieved context candidates can be typed flexibly.
-from typing import Any
 
-# Import the singleton LLM connector used for classifier calls.
+from backend.config import get_settings
 from backend.llm_client import get_llm_connector
+from backend.llm_errors import LLMAuthError, LLMConfigError, LLMError
+from backend.services.memory_retrieval_service import calculate_query_relevance_score, calculate_semantic_canary_match, tokenize_terms
+from backend.services.repo_session_store import load_code_chunks_json, load_repo_identity
 
-# Define the classifier categories accepted by the frontend flow.
 GENERAL = "GENERAL"
 SPECIFIC_CODE = "SPECIFIC_CODE"
 REPO_WIDE = "REPO_WIDE"
 
-# Define the category labels returned to the UI.
 CATEGORY_LABELS = {
     GENERAL: "General",
     SPECIFIC_CODE: "Specific code",
     REPO_WIDE: "Repo-wide",
 }
 
-# Define the category values used by the React app.
 FRONTEND_CATEGORY_VALUES = {
     GENERAL: "general",
     SPECIFIC_CODE: "specific_code",
     REPO_WIDE: "repo_wide",
 }
 
-# Define the strict system instruction for the cheap LLM classifier.
 PROMPT_CLASSIFIER_SYSTEM_PROMPT = """
-You are a high-precision intent classifier for a repository explorer. Categorize the user query into exactly one of the three categories below.
+You are a high-precision routing classifier for a repository explorer.
+Choose the one route that should handle the user's next message.
 
-### CATEGORIES
-1. GENERAL: Use only when the user is asking a general programming/conversation question that does not need the loaded repository. If Memory found no relevant candidate files and there are no repo words, this may be GENERAL.
-2. SPECIFIC_CODE: Use when the answer should focus on concrete code. This includes selected files, explicit filenames/functions/classes/routes, "which file/where is" questions, and Memory candidates whose relevance score is at or above the SPECIFIC_CODE score threshold after repo-wide intent has been ruled out.
-3. REPO_WIDE: Use when the answer needs a broad view of the codebase, architecture, cross-file behavior, overall behavior, or vague repo context. Explicit repo-wide wording overrides Memory score unless the user selected/named a concrete file or symbol.
+Routes:
+GENERAL: The answer does not need the loaded repository. Use this for normal conversation and general programming explanations.
+SPECIFIC_CODE: The answer should focus on a concrete file, selected graph file, named class/function/method/component/service/route, explicit path, or a "where is / which file" lookup. 
+REPO_WIDE: The answer needs broad repository context, architecture, entire code flow, overall behavior, cross-file interactions, dependency relationships, or how a feature is wired through the project. In addition, it should include any refrence to the code that is general phrased such as what is the code flow here? is this code good? what is the program flow etc
 
-### CRITICAL MAPPING RULES
-- Treat Memory candidate scores as repo evidence. If any Memory candidate has score >= 0.40, strongly prefer SPECIFIC_CODE even when the user did not name a file.
-- Do not use the number of candidate files to decide SPECIFIC_CODE. One high-scoring file and many high-scoring files both mean SPECIFIC_CODE.
-- Do not let Memory score override explicit whole-repo wording such as "the whole repo", "architecture", "overall", "this project", "codebase", or "what does this repo do".
-- General-looking implementation questions must be checked against Memory evidence. For example, "How do I implement a Circle class?" is SPECIFIC_CODE if Memory found Circle/shape/model candidates with score >= 0.40, and GENERAL only if no repository evidence reaches the threshold.
-- References like "the code," "here," "this," "in here," "this project," "the repo," or "the codebase" MUST NOT be GENERAL.
-- Architectural questions ("How does data flow?", "How is auth wired?", "How do modules interact?") are REPO_WIDE unless the user selected/named a concrete file or symbol.
-- A selected graph file is strong evidence for SPECIFIC_CODE.
-
-### EXAMPLES
-- "Explain the code here" -> REPO_WIDE
-- "What does the code do?" -> REPO_WIDE
-- "How does this project handle auth?" -> REPO_WIDE
-- "What is the main function of the repo?" + Memory candidate score 0.87 -> REPO_WIDE
-- "Where is the database initialized?" + Memory candidate score 0.62 -> SPECIFIC_CODE
-- "Look at the code in main.py and explain it" -> SPECIFIC_CODE
-- "What is the purpose of the handle_request function?" -> SPECIFIC_CODE
-- "How should I implement a Circle class?" + Memory candidate score 0.77 -> SPECIFIC_CODE
-- "How should I implement a Circle class?" + no Memory candidate score >= 0.40 -> GENERAL
-- "How do I write a for-loop in Python?" -> GENERAL
-
-### OUTPUT RULES
+Decision rules:
+- If the selected graph file is not "none", use SPECIFIC_CODE unless the prompt explicitly asks about the whole project, full architecture, overall behavior, or entire code flow.
+- Use the current repository identity and context matcher as routing evidence.
+- If the user query relates to the repository's tech stack, core keywords, README summary, or matched repo identity keywords, choose REPO_WIDE unless the user selected or named one concrete file/symbol.
+- If the user query is a generic programming question that does not relate to the repository identity, choose GENERAL even when a repository is loaded.
+- Questions like "what is the entire code flow?", "what does this project do?", "explain the codebase", "how does data flow?", and "show the architecture" are REPO_WIDE.
+- Do not choose SPECIFIC_CODE merely because the repository is loaded.
+- Do not infer an attached file unless a selected graph file is provided or the prompt names a concrete file/symbol.
 - Return exactly one string: GENERAL, SPECIFIC_CODE, or REPO_WIDE.
 - Do not explain. Do not use punctuation. Do not use quotes.
 """.strip()
 
-# Skip the remote classifier and always use the local keyword heuristic.
-# Set to False to re-enable LLM-based classification when a paid API key is available.
-_FORCE_LOCAL_CLASSIFICATION = True
-# Kept for compatibility; unused while _FORCE_LOCAL_CLASSIFICATION is True.
-CLASSIFICATION_TIMEOUT_SECONDS = 4.0
+CLASSIFICATION_TIMEOUT_SECONDS = 8.0
+SEMANTIC_CANARY_OVERRIDE_THRESHOLD = 0.70
+IDENTITY_MATCH_CANARY_THRESHOLD = 0.40
 
-# Minimum Memory relevance score that makes a query specific-code.
-SPECIFIC_CODE_SCORE_THRESHOLD = 0.40
-# Keep classifier prompt evidence compact even when retrieval returns many snippets.
-MAX_CANDIDATES_IN_CLASSIFIER_PROMPT = 10
+REPO_REFERENCE_PATTERNS = (
+    r"\brepo\b",
+    r"\brepository\b",
+    r"\bproject\b",
+    r"\bcodebase\b",
+    r"\bcode base\b",
+    r"\bthis\s+(code|repo|repository|project|app|application|codebase)\b",
+    r"\bcurrent\s+(code|repo|repository|project|app|application|codebase)\b",
+    r"\bloaded\s+(code|repo|repository|project|app|application|codebase)\b",
+    r"\bin\s+here\b",
+)
+
+GENERIC_LANGUAGE_HOWTO_PATTERN = re.compile(
+    r"\bhow\s+(?:do|can|should|would)?\s*i?\s*(?:write|implement|create|make|build|define)\b.*\b(function|method|class|algorithm|program|script)\b"
+    r"|\b(function|method|class|algorithm|program|script)\b.*\b(?:in|using|with)\s+(python|java|javascript|typescript|go|rust|ruby|php|swift|kotlin|c\+\+|c#)\b",
+    re.IGNORECASE,
+)
+
+GENERIC_REPO_OVERRIDE_TERMS = {
+    "algorithm",
+    "build",
+    "class",
+    "code",
+    "create",
+    "define",
+    "function",
+    "implement",
+    "java",
+    "javascript",
+    "kotlin",
+    "method",
+    "program",
+    "python",
+    "return",
+    "returns",
+    "ruby",
+    "rust",
+    "script",
+    "swift",
+    "typescript",
+    "using",
+    "write",
+}
+MIN_DISTINCTIVE_REPO_TERM_HITS = 2
+WHOLE_REPO_PROMPT_PATTERN = re.compile(
+    r"\b(whole|entire|overall|architecture|codebase|code\s+base|project|repository|repo|data\s+flow|code\s+flow)\b",
+    re.IGNORECASE,
+)
 
 
-# Store one prompt classification result.
+@dataclass(frozen=True)
+class RepoMatchSignals:
+    canary_score: float = 0.0
+    canary_file_path: str | None = None
+    canary_function_name: str | None = None
+    topic_keywords: tuple[str, ...] = ()
+    topic_match_keywords: tuple[str, ...] = ()
+    identity_sentence: str = ""
+
+
 @dataclass(frozen=True)
 class PromptClassificationResult:
-    # Store the frontend category value.
     category: str
-    # Store the display label for the category.
     label: str
-    # Store the raw classifier category string.
     classifier_category: str
-    # Store the model used for classification.
     classifier_model: str
-    # Store the raw model response for debugging.
     raw_classifier_response: str
-    # Store whether the local fallback was used.
     used_local_fallback: bool
-    # Store a short reason for debugging and UI metadata.
     reason: str
+    repo_relevance_score: float | None = None
+    canary_score: float | None = None
+    canary_file_path: str | None = None
+    topic_keywords: tuple[str, ...] = ()
+    topic_match_keywords: tuple[str, ...] = ()
 
 
-# Classify a prompt by calling a cheap LLM model.
-async def classify_prompt(prompt: str, selected_file_path: str | None, classifier_model_name: str, retrieved_context: list[dict[str, Any]] | None = None) -> PromptClassificationResult:
-    # Normalize optional retrieved context once.
-    context_candidates = normalize_retrieved_context(retrieved_context)
-    # When the local-only flag is set, skip the API call entirely.
-    if _FORCE_LOCAL_CLASSIFICATION:
-        classifier_category = classify_prompt_locally(prompt, selected_file_path, context_candidates)
-        return build_result(classifier_category, classifier_model_name, "LOCAL_ONLY", True, "Remote classifier disabled.")
-    # Build the strict OpenAI-compatible messages for classification.
-    messages = build_classifier_messages(prompt, selected_file_path, context_candidates)
-    # Try the cheap LLM classifier first.
-    try:
-        # Send the prompt to the requested classifier model with deterministic settings.
-        result = await asyncio.wait_for(get_llm_connector().send_messages(messages=messages, temperature=0.0, max_tokens=8, model_name=classifier_model_name), timeout=CLASSIFICATION_TIMEOUT_SECONDS)
-        # Read the raw classifier response.
-        raw_response = result.message.strip()
-        # Parse the response into one accepted category.
-        classifier_category = parse_classifier_category(raw_response)
-        # Fall back locally when the model ignores the exact-output contract.
-        if classifier_category is None:
-            # Choose a deterministic local category.
-            classifier_category = classify_prompt_locally(prompt, selected_file_path, context_candidates)
-            # Return fallback metadata.
-            return build_result(classifier_category, classifier_model_name, raw_response, True, "LLM classifier returned an invalid category, so local fallback was used.")
-        # Apply a deterministic repo-evidence guard when the model underuses Memory candidates.
-        guarded_category = apply_context_bias(prompt, selected_file_path, context_candidates, classifier_category)
-        # Return guard metadata when the LLM category was adjusted.
-        if guarded_category != classifier_category:
-            return build_result(guarded_category, classifier_model_name, raw_response, True, "Memory candidate evidence adjusted the classifier category.")
-        # Return LLM classifier metadata.
-        return build_result(classifier_category, classifier_model_name, raw_response, False, "Classified by the prompt classification LLM.")
-    # Fall back locally when the classifier model is unavailable.
-    except Exception as exc:
-        # Choose a deterministic local category so the app can continue.
-        classifier_category = classify_prompt_locally(prompt, selected_file_path, context_candidates)
-        # Return fallback metadata without exposing credentials or provider internals.
-        return build_result(classifier_category, classifier_model_name, f"LOCAL_FALLBACK: {exc.__class__.__name__}", True, "Classifier LLM failed, so local fallback was used.")
+async def classify_prompt(
+    prompt: str,
+    selected_file_path: str | None,
+    classifier_model_name: str,
+    retrieved_context: list[dict] | None = None,
+    repo_session_id: str | None = None,
+) -> PromptClassificationResult:
+    """Classify a prompt by making a real LLM request."""
+    # Keep the request schema backward-compatible, but do not let retrieved snippets bias routing.
+    del retrieved_context
+
+    if selected_file_path and not asks_for_whole_repo(prompt):
+        return build_result(
+            classifier_category=SPECIFIC_CODE,
+            classifier_model_name=classifier_model_name,
+            raw_response="SELECTED_FILE_RULE",
+            reason="Selected graph file is active, so the prompt is routed to that file's code chunks only.",
+        )
+
+    repo_identity = load_repo_identity_for_classification(repo_session_id)
+    topic_keywords = extract_prompt_topics(prompt)
+    topic_match_keywords = match_topics_to_repo_identity(topic_keywords, repo_identity)
+    messages = build_classifier_messages(prompt, selected_file_path, repo_identity, topic_keywords, topic_match_keywords)
+
+    classifier_task = send_classifier_request(messages, classifier_model_name)
+    signals_task = asyncio.to_thread(calculate_repo_match_signals, prompt, repo_session_id, repo_identity, topic_keywords, topic_match_keywords)
+    (result, classifier_fallback_used), repo_signals = await asyncio.gather(classifier_task, signals_task)
+
+    raw_response = result.message.strip()
+    classifier_category = parse_classifier_category(raw_response)
+
+    if classifier_category is None:
+        preview = raw_response[:120] if raw_response else "<empty>"
+        raise LLMError(f"Prompt classifier returned an invalid route: {preview}")
+
+    if should_override_general_to_repo_wide(prompt, selected_file_path, repo_signals, classifier_category):
+        return build_result(
+            classifier_category=REPO_WIDE,
+            classifier_model_name=result.model or classifier_model_name,
+            raw_response=raw_response,
+            reason=build_reason(
+                classifier_fallback_used,
+                classifier_model_name,
+                result.model or classifier_model_name,
+                build_repo_override_reason(repo_signals),
+            ),
+            repo_signals=repo_signals,
+        )
+
+    return build_result(
+        classifier_category=classifier_category,
+        classifier_model_name=result.model or classifier_model_name,
+        raw_response=raw_response,
+        reason=build_reason(classifier_fallback_used, classifier_model_name, result.model or classifier_model_name, "Classified by the prompt classification LLM."),
+        repo_signals=repo_signals,
+    )
 
 
-# Build the strict classifier messages.
-def build_classifier_messages(prompt: str, selected_file_path: str | None, context_candidates: list[dict[str, Any]]) -> list[dict[str, str]]:
-    # Build selected-file context for the classifier.
+def build_classifier_messages(
+    prompt: str,
+    selected_file_path: str | None,
+    repo_identity: dict,
+    topic_keywords: tuple[str, ...],
+    topic_match_keywords: tuple[str, ...],
+) -> list[dict[str, str]]:
     selected_file_text = selected_file_path or "none"
-    # Build compact Memory evidence for the classifier.
-    memory_context_text = build_memory_context_text(context_candidates)
-    # Build the user message with the prompt and graph selection.
+    identity_text = format_repo_identity_for_prompt(repo_identity)
+    topic_text = ", ".join(topic_keywords) if topic_keywords else "none"
+    match_text = ", ".join(topic_match_keywords) if topic_match_keywords else "none"
     user_message = f"""
+Current repository identity:
+{identity_text}
+
+Topic extractor keywords:
+{topic_text}
+
+Context matcher result:
+Matched repo identity keywords: {match_text}
+Match count: {len(topic_match_keywords)}
+
 User prompt:
 {prompt.strip()}
 
 Selected graph file:
 {selected_file_text}
 
-Memory candidate files/snippets:
-{memory_context_text}
-
-Return exactly one category:
+Return exactly one route:
 GENERAL
 SPECIFIC_CODE
 REPO_WIDE
 """.strip()
-    # Return the system and user messages.
-    return [{"role": "system", "content": PROMPT_CLASSIFIER_SYSTEM_PROMPT}, {"role": "user", "content": user_message}]
+
+    return [
+        {"role": "system", "content": PROMPT_CLASSIFIER_SYSTEM_PROMPT},
+        {"role": "user", "content": user_message},
+    ]
 
 
-# Parse the classifier response into one category.
 def parse_classifier_category(response: str) -> str | None:
-    # Normalize common quote/code-fence/punctuation wrappers.
-    cleaned = response.strip().splitlines()[0].strip().strip("\"'`.,;:") if response.strip() else ""
-    # Return the cleaned category when it is valid.
-    if cleaned in {GENERAL, SPECIFIC_CODE, REPO_WIDE}:
-        # Use the exact valid category.
-        return cleaned
-    # Detect noisy responses that contain exactly one valid category.
-    matches = [category for category in (GENERAL, SPECIFIC_CODE, REPO_WIDE) if category in response]
-    # Accept noisy text only when it mentions exactly one category.
+    if not response.strip():
+        return None
+
+    first_line = response.strip().splitlines()[0]
+    normalized = normalize_category_text(first_line)
+
+    if normalized in {GENERAL, SPECIFIC_CODE, REPO_WIDE}:
+        return normalized
+
+    whole_response = normalize_category_text(response)
+    matches = [category for category in (GENERAL, SPECIFIC_CODE, REPO_WIDE) if category in whole_response]
+
     if len(matches) == 1:
-        # Return the only category found.
         return matches[0]
-    # Return None when the response is not trustworthy.
+
     return None
 
 
-# Classify locally only as a fallback when the LLM classification is unavailable.
-def classify_prompt_locally(prompt: str, selected_file_path: str | None, retrieved_context: list[dict[str, Any]] | None = None) -> str:
-    # Normalize optional retrieved context.
-    context_candidates = normalize_retrieved_context(retrieved_context)
-    # Keep greetings and conversational prompts general.
-    if is_greeting_or_chat_prompt(prompt):
-        return GENERAL
-    # Route selected graph-file questions to specific-code context.
-    if selected_file_path:
-        # Return specific-code because the user selected a concrete file.
-        return SPECIFIC_CODE
-    # Respect explicit broad repo questions before applying Memory score.
-    if has_repo_wide_cue(prompt) and not is_specific_code_prompt(prompt):
-        return REPO_WIDE
-    # Check whether Memory found a high-confidence candidate.
-    has_specific_score = has_specific_score_match(context_candidates)
-    # Use Memory matches unless the prompt is plainly asking for a generic definition.
-    if not (is_general_theory_prompt(prompt) and not mentions_named_code_entity(prompt)):
-        # Route high-scoring Memory matches to specific-code context.
-        if has_specific_score:
-            # Return specific-code because Memory found a high-confidence match.
-            return SPECIFIC_CODE
-    # Keep standalone implementation questions general when Memory found no repo match.
-    if not has_specific_score and is_standalone_implementation_prompt(prompt):
-        return GENERAL
-    # Route file/symbol questions.
-    if is_specific_code_prompt(prompt):
-        # Return specific-code because the question points at code symbols or paths.
-        return SPECIFIC_CODE
-    # Default to general when no repo/code cues are present.
-    return GENERAL
+def normalize_category_text(value: str) -> str:
+    cleaned = value.strip().strip("\"'`.,;:")
+    cleaned = re.sub(r"[^A-Za-z_-]+", "_", cleaned)
+    cleaned = re.sub(r"_+", "_", cleaned)
+    return cleaned.strip("_").upper().replace("-", "_")
 
 
-# Apply deterministic Memory evidence so a weak classifier cannot ignore focused repo matches.
-def apply_context_bias(prompt: str, selected_file_path: str | None, context_candidates: list[dict[str, Any]], classifier_category: str) -> str:
-    # Keep greetings and conversational prompts general.
-    if is_greeting_or_chat_prompt(prompt):
-        return GENERAL
-    # Respect selected graph files as specific code context.
-    if selected_file_path:
-        return SPECIFIC_CODE
-    # Repo-wide wording should not be overwritten by a high-scoring Memory candidate.
-    if has_repo_wide_cue(prompt) and not is_specific_code_prompt(prompt):
-        return REPO_WIDE
-    # Check whether Memory found a high-confidence candidate.
-    has_specific_score = has_specific_score_match(context_candidates)
-    # Keep standalone implementation questions general when Memory found no repo match.
-    if not has_specific_score and is_standalone_implementation_prompt(prompt):
-        return GENERAL
-    # No high-scoring Memory candidate means no score-based adjustment is needed.
-    if not has_specific_score:
-        return classifier_category
-    # Avoid hijacking pure concept-definition questions.
-    if is_general_theory_prompt(prompt) and not mentions_named_code_entity(prompt):
-        return classifier_category
-    # Any high-scoring Memory candidate means the question can be answered as specific code.
-    return SPECIFIC_CODE
-
-
-# Normalize retrieved context objects into the fields classification needs.
-def normalize_retrieved_context(retrieved_context: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
-    # Return an empty list for missing or invalid context.
-    if not isinstance(retrieved_context, list):
-        return []
-    # Prepare normalized candidates.
-    normalized_candidates = []
-    # Iterate over retrieved snippets.
-    for item in retrieved_context:
-        # Skip invalid entries.
-        if not isinstance(item, dict):
-            continue
-        # Read common file path keys.
-        file_path = str(item.get("file_path") or item.get("path") or item.get("filename") or "").strip()
-        # Skip entries without a file path.
-        if not file_path:
-            continue
-        # Store a compact candidate.
-        normalized_candidates.append(
-            {
-                "file_path": file_path,
-                "function_name": str(item.get("function_name") or item.get("name") or item.get("symbol") or "").strip(),
-                "score": item.get("score"),
-                "start_line": item.get("start_line"),
-                "end_line": item.get("end_line"),
-            }
-        )
-    # Return normalized candidates.
-    return normalized_candidates
-
-
-# Build compact Memory evidence text for the LLM classifier.
-def build_memory_context_text(context_candidates: list[dict[str, Any]]) -> str:
-    # Count unique files for display only.
-    candidate_file_count = count_candidate_files(context_candidates)
-    # Return a clear fallback when no Memory evidence exists.
-    if candidate_file_count == 0:
-        return "No Memory candidates were found."
-    # Prepare top candidate lines.
-    lines = [
-        f"SPECIFIC_CODE score threshold: {SPECIFIC_CODE_SCORE_THRESHOLD}",
-        f"Highest candidate score: {max_candidate_score(context_candidates)}",
-        f"Unique candidate files: {candidate_file_count}",
-    ]
-    # Add a compact view of the first candidates only.
-    for candidate in context_candidates[:MAX_CANDIDATES_IN_CLASSIFIER_PROMPT]:
-        # Read the optional symbol name.
-        symbol_text = f" :: {candidate['function_name']}" if candidate.get("function_name") else ""
-        # Read optional line metadata.
-        line_text = build_line_text(candidate)
-        # Read optional score metadata.
-        score_text = f" score={candidate['score']}" if candidate.get("score") is not None else ""
-        # Add the candidate line.
-        lines.append(f"- {candidate['file_path']}{symbol_text}{line_text}{score_text}")
-    # Mention omitted candidates if retrieval returned more.
-    if len(context_candidates) > MAX_CANDIDATES_IN_CLASSIFIER_PROMPT:
-        lines.append(f"- ... {len(context_candidates) - MAX_CANDIDATES_IN_CLASSIFIER_PROMPT} more candidates omitted")
-    # Return compact evidence.
-    return "\n".join(lines)
-
-
-# Count unique file paths in Memory candidates.
-def count_candidate_files(context_candidates: list[dict[str, Any]]) -> int:
-    # Return unique non-empty file path count.
-    return len({candidate["file_path"] for candidate in context_candidates if candidate.get("file_path")})
-
-
-# Decide whether any Memory candidate crosses the specific-code threshold.
-def has_specific_score_match(context_candidates: list[dict[str, Any]]) -> bool:
-    # Return true for the first high-confidence candidate.
-    return any((score := parse_candidate_score(candidate.get("score"))) is not None and score >= SPECIFIC_CODE_SCORE_THRESHOLD for candidate in context_candidates)
-
-
-# Return the highest numeric Memory score, if any.
-def max_candidate_score(context_candidates: list[dict[str, Any]]) -> float | None:
-    # Parse all numeric candidate scores.
-    scores = [score for candidate in context_candidates if (score := parse_candidate_score(candidate.get("score"))) is not None]
-    # Return no score when none are usable.
-    if not scores:
-        return None
-    # Return a compact score for prompt readability.
-    return round(max(scores), 4)
-
-
-# Parse a Memory score into a float.
-def parse_candidate_score(score: Any) -> float | None:
-    # Keep missing scores from affecting threshold decisions.
-    if score is None:
-        return None
-    # Convert numeric or numeric-string scores.
+async def send_classifier_request(messages: list[dict[str, str]], classifier_model_name: str):
     try:
-        return float(score)
-    except (TypeError, ValueError):
-        return None
-
-
-# Build optional line range text for a Memory candidate.
-def build_line_text(candidate: dict[str, Any]) -> str:
-    # Read start and end line values.
-    start_line = candidate.get("start_line")
-    end_line = candidate.get("end_line")
-    # Return no line text when either side is missing.
-    if start_line is None or end_line is None:
-        return ""
-    # Return a compact line label.
-    return f" lines={start_line}-{end_line}"
-
-
-# Detect explicit code/file/symbol prompts.
-def is_specific_code_prompt(prompt: str) -> bool:
-    # File paths/extensions are specific code evidence.
-    if re.search(r"[\w./-]+\.(py|js|jsx|ts|tsx|java|go|rb|php|cpp|c|h|hpp)\b", prompt, re.IGNORECASE):
-        return True
-    # Routes and endpoints are specific code evidence.
-    if re.search(r"\b(GET|POST|PUT|PATCH|DELETE)\s+/", prompt):
-        return True
-    # Named implementation entities are specific code evidence.
-    if mentions_named_code_entity(prompt):
-        return True
-    # Location questions usually expect focused code files.
-    return bool(re.search(r"\b(where is|which file|specific file|handler|endpoint|route|import)\b", prompt, re.IGNORECASE))
-
-
-# Detect repo-wide wording.
-def has_repo_wide_cue(prompt: str) -> bool:
-    # Normalize prompt text.
-    lowered = prompt.lower()
-    # Match wording that explicitly asks about the loaded codebase.
-    return any(
-        term in lowered
-        for term in (
-            "repo",
-            "repository",
-            "architecture",
-            "data flow",
-            "dependencies",
-            "all files",
-            "whole code",
-            "whole project",
-            "entire project",
-            "overall",
-            "overview",
-            "summary",
-            "codebase",
-            "this project",
-            "the code",
-            "code here",
-            "refactor",
-            "rewrite",
-            "debug this",
-            "bug in",
-            "where should",
-            "how do i add",
-            "how should i add",
-            "where do i implement",
-            "where should i implement",
+        result = await asyncio.wait_for(
+            get_llm_connector().send_messages(
+                messages=messages,
+                temperature=0.0,
+                max_tokens=12,
+                model_name=classifier_model_name,
+            ),
+            timeout=CLASSIFICATION_TIMEOUT_SECONDS,
         )
+        return result, False
+    except asyncio.TimeoutError as exc:
+        raise LLMError("Prompt classifier timed out before returning a route.") from exc
+    except (LLMAuthError, LLMConfigError):
+        raise
+    except LLMError:
+        fallback_model_name = get_settings().llm_model_name
+        if not fallback_model_name or fallback_model_name == classifier_model_name:
+            raise
+
+    try:
+        result = await asyncio.wait_for(
+            get_llm_connector().send_messages(
+                messages=messages,
+                temperature=0.0,
+                max_tokens=12,
+                model_name=fallback_model_name,
+            ),
+            timeout=CLASSIFICATION_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError as exc:
+        raise LLMError("Prompt classifier fallback timed out before returning a route.") from exc
+
+    return result, True
+
+
+def build_reason(classifier_fallback_used: bool, requested_model_name: str, actual_model_name: str, base_reason: str) -> str:
+    if classifier_fallback_used:
+        return f"Classifier model {requested_model_name} failed; retried with {actual_model_name}. {base_reason}"
+
+    return base_reason
+
+
+def build_result(
+    classifier_category: str,
+    classifier_model_name: str,
+    raw_response: str,
+    reason: str,
+    repo_signals: RepoMatchSignals | None = None,
+) -> PromptClassificationResult:
+    signals = repo_signals or RepoMatchSignals()
+    return PromptClassificationResult(
+        category=FRONTEND_CATEGORY_VALUES[classifier_category],
+        label=CATEGORY_LABELS[classifier_category],
+        classifier_category=classifier_category,
+        classifier_model=classifier_model_name,
+        raw_classifier_response=raw_response,
+        used_local_fallback=False,
+        reason=reason,
+        repo_relevance_score=signals.canary_score,
+        canary_score=signals.canary_score,
+        canary_file_path=signals.canary_file_path,
+        topic_keywords=signals.topic_keywords,
+        topic_match_keywords=signals.topic_match_keywords,
     )
 
 
-# Detect implementation questions that are general unless Memory/repo wording anchors them.
-def is_standalone_implementation_prompt(prompt: str) -> bool:
-    # Repo wording means the implementation question belongs to the codebase.
-    if has_repo_wide_cue(prompt):
-        return False
-    # Explicit files or routes are not standalone.
-    if re.search(r"[\w./-]+\.(py|js|jsx|ts|tsx|java|go|rb|php|cpp|c|h|hpp)\b", prompt, re.IGNORECASE):
-        return False
-    if re.search(r"\b(GET|POST|PUT|PATCH|DELETE)\s+/", prompt):
-        return False
-    # Match common standalone implementation asks.
-    return bool(re.search(r"\b(how\s+(do|should|can)\s+i\s+|how\s+to\s+|can\s+you\s+)?(implement|create|build|write|make|add)\b", prompt, re.IGNORECASE))
+def calculate_repo_relevance_score(prompt: str, repo_session_id: str | None) -> float:
+    if not repo_session_id:
+        return 0.0
+
+    try:
+        code_chunks_json = load_code_chunks_json(repo_session_id)
+    except (FileNotFoundError, ValueError):
+        return 0.0
+
+    return calculate_query_relevance_score(prompt, code_chunks_json)
 
 
-# Detect named symbols/classes/functions rather than generic theory terms.
-def mentions_named_code_entity(prompt: str) -> bool:
-    # Match capitalized, camelCase, snake_case, or dotted symbols near code entity words.
-    return bool(
-        re.search(
-            r"\b([A-Z][A-Za-z0-9_]*|[a-z]+[A-Z][A-Za-z0-9_]*|[a-z_]+_[a-z0-9_]+)\s+(class|function|method|component|service|handler|endpoint|route)\b",
-            prompt,
-        )
-        or re.search(
-            r"\b(class|function|method|component|service|handler|endpoint|route)\s+([A-Z][A-Za-z0-9_]*|[a-z]+[A-Z][A-Za-z0-9_]*|[a-z_]+_[a-z0-9_]+)\b",
-            prompt,
-        )
+def should_override_general_to_repo_wide(
+    prompt: str,
+    selected_file_path: str | None,
+    repo_signals: RepoMatchSignals,
+    classifier_category: str,
+) -> bool:
+    if classifier_category != GENERAL:
+        return False
+    if selected_file_path:
+        return False
+
+    if is_generic_language_howto(prompt):
+        return False
+
+    if repo_signals.canary_score > SEMANTIC_CANARY_OVERRIDE_THRESHOLD:
+        return True
+
+    if repo_signals.topic_match_keywords and repo_signals.canary_score >= IDENTITY_MATCH_CANARY_THRESHOLD:
+        return True
+
+    return False
+
+
+def build_repo_override_reason(repo_signals: RepoMatchSignals) -> str:
+    if repo_signals.canary_score > SEMANTIC_CANARY_OVERRIDE_THRESHOLD:
+        return f"LLM classified GENERAL, but the Chroma canary match crossed {SEMANTIC_CANARY_OVERRIDE_THRESHOLD:.2f} with score {repo_signals.canary_score:.4f}."
+
+    matched_topics = ", ".join(repo_signals.topic_match_keywords) or "none"
+    return (
+        "LLM classified GENERAL, but the topic matcher found repo identity keywords "
+        f"({matched_topics}) and the Chroma canary score {repo_signals.canary_score:.4f} crossed {IDENTITY_MATCH_CANARY_THRESHOLD:.2f}."
     )
 
 
-# Detect pure concept-definition prompts that should remain general without named repo evidence.
-def is_general_theory_prompt(prompt: str) -> bool:
-    # Match common educational concept questions.
-    return bool(re.search(r"^\s*(what is|what are|explain|define)\s+(a|an|the)?\s*(class|function|method|interface|api|object|variable|loop|inheritance|polymorphism)\b", prompt, re.IGNORECASE))
+def load_repo_identity_for_classification(repo_session_id: str | None) -> dict:
+    if not repo_session_id:
+        return {}
+
+    try:
+        return load_repo_identity(repo_session_id)
+    except (FileNotFoundError, ValueError):
+        return {}
 
 
-# Detect simple conversational prompts that should not be pulled into repo context.
-def is_greeting_or_chat_prompt(prompt: str) -> bool:
-    # Normalize lightweight conversational text.
-    normalized = prompt.strip().lower()
-    # Match short greetings or assistant-directed chat.
-    return normalized in {"hi", "hello", "hey", "thanks", "thank you"} or bool(re.search(r"^\s*(hi|hello|hey)\b", prompt, re.IGNORECASE))
+def calculate_repo_match_signals(
+    prompt: str,
+    repo_session_id: str | None,
+    repo_identity: dict,
+    topic_keywords: tuple[str, ...],
+    topic_match_keywords: tuple[str, ...],
+) -> RepoMatchSignals:
+    canary_match = {"score": 0.0, "file_path": None, "function_name": None}
+
+    if repo_session_id:
+        try:
+            code_chunks_json = load_code_chunks_json(repo_session_id)
+        except (FileNotFoundError, ValueError):
+            code_chunks_json = []
+
+        if code_chunks_json:
+            canary_match = calculate_semantic_canary_match(prompt, code_chunks_json)
+
+    return RepoMatchSignals(
+        canary_score=float(canary_match.get("score") or 0.0),
+        canary_file_path=canary_match.get("file_path"),
+        canary_function_name=canary_match.get("function_name"),
+        topic_keywords=topic_keywords,
+        topic_match_keywords=topic_match_keywords,
+        identity_sentence=str(repo_identity.get("identity_sentence") or ""),
+    )
 
 
-# Build the frontend response object.
-def build_result(classifier_category: str, classifier_model_name: str, raw_response: str, used_local_fallback: bool, reason: str) -> PromptClassificationResult:
-    # Return the structured result.
-    return PromptClassificationResult(category=FRONTEND_CATEGORY_VALUES[classifier_category], label=CATEGORY_LABELS[classifier_category], classifier_category=classifier_category, classifier_model=classifier_model_name, raw_classifier_response=raw_response, used_local_fallback=used_local_fallback, reason=reason)
+def extract_prompt_topics(prompt: str) -> tuple[str, ...]:
+    seen: set[str] = set()
+    topics: list[str] = []
+
+    for term in tokenize_terms(prompt):
+        if term in GENERIC_REPO_OVERRIDE_TERMS or term in seen:
+            continue
+        seen.add(term)
+        topics.append(term)
+
+    return tuple(topics[:12])
+
+
+def match_topics_to_repo_identity(topic_keywords: tuple[str, ...], repo_identity: dict) -> tuple[str, ...]:
+    if not topic_keywords or not isinstance(repo_identity, dict):
+        return ()
+
+    identity_terms: set[str] = set()
+    for key in ("project_name", "readme_summary", "identity_sentence"):
+        identity_terms.update(tokenize_terms(str(repo_identity.get(key) or "")))
+
+    for value in repo_identity.get("tech_stack") or []:
+        identity_terms.update(tokenize_terms(str(value)))
+    for value in repo_identity.get("core_keywords") or []:
+        identity_terms.update(tokenize_terms(str(value)))
+
+    return tuple(term for term in topic_keywords if term in identity_terms)
+
+
+def format_repo_identity_for_prompt(repo_identity: dict) -> str:
+    if not repo_identity:
+        return "No repository identity card is available."
+
+    project_name = repo_identity.get("project_name") or "unknown"
+    tech_stack = ", ".join(str(value) for value in repo_identity.get("tech_stack") or []) or "unknown"
+    core_keywords = ", ".join(str(value) for value in repo_identity.get("core_keywords") or []) or "none"
+    readme_summary = repo_identity.get("readme_summary") or "No README summary was available."
+
+    return "\n".join(
+        [
+            f"Project: {project_name}",
+            f"Tech stack: {tech_stack}",
+            f"Core keywords: {core_keywords}",
+            f"README summary: {readme_summary}",
+        ]
+    )
+
+
+def has_explicit_repo_reference(prompt: str) -> bool:
+    normalized = prompt.lower()
+    return any(re.search(pattern, normalized) for pattern in REPO_REFERENCE_PATTERNS)
+
+
+def is_generic_language_howto(prompt: str) -> bool:
+    return bool(GENERIC_LANGUAGE_HOWTO_PATTERN.search(prompt))
+
+
+def asks_for_whole_repo(prompt: str) -> bool:
+    return bool(WHOLE_REPO_PROMPT_PATTERN.search(prompt))
+
+
+def count_distinctive_repo_term_hits(prompt: str, repo_session_id: str | None) -> int:
+    if not repo_session_id:
+        return 0
+
+    query_terms = set(tokenize_terms(prompt)) - GENERIC_REPO_OVERRIDE_TERMS
+    if not query_terms:
+        return 0
+
+    try:
+        code_chunks_json = load_code_chunks_json(repo_session_id)
+    except (FileNotFoundError, ValueError):
+        return 0
+
+    repo_terms: set[str] = set()
+    for chunk in code_chunks_json:
+        if not isinstance(chunk, dict):
+            continue
+        searchable_text = " ".join(
+            str(chunk.get(key) or "")
+            for key in ("file_path", "path", "name", "entity_name", "function_name", "scope", "type", "content")
+        )
+        repo_terms.update(tokenize_terms(searchable_text))
+
+    return len(query_terms & repo_terms)

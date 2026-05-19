@@ -6,6 +6,8 @@ fastapi==0.115.6
 httpx==0.28.1
 # Pydantic Settings loads typed configuration from environment variables and .env.
 pydantic-settings==2.7.1
+# eval-type-backport lets Pydantic evaluate Python 3.10 union annotations under Python 3.9.
+eval-type-backport==0.3.1
 # Python Multipart lets FastAPI receive form fields and uploaded JSON files.
 python-multipart==0.0.20
 # Uvicorn runs the FastAPI application inside the container.

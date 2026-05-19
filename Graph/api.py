@@ -19,7 +19,16 @@ def generate_node_details(request_body: Any = Body(None)) -> dict:
         raise HTTPException(status_code=400, detail="request body must be a dictionary")
 
     structure = request_body.get("structure")
+    repo_session_id = request_body.get("repo_session_id")
     node_id = request_body.get("node_id")
+
+    if repo_session_id:
+        try:
+            from backend.services.repo_session_store import load_structure_json
+
+            structure = load_structure_json(repo_session_id)
+        except (FileNotFoundError, ValueError) as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     if not isinstance(structure, dict):
         raise HTTPException(status_code=400, detail="structure must be a dictionary")

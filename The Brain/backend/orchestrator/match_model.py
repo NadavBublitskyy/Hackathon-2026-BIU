@@ -13,8 +13,8 @@ from dataclasses import dataclass
 from typing import Any
 
 
-# Define the default cheap model used only for intent classification.
-DEFAULT_CLASSIFIER_MODEL_NAME = "google/gemini-2.5-flash:free"
+# Define the default model used only for intent/model classification.
+DEFAULT_CLASSIFIER_MODEL_NAME = "openrouter/auto"
 # Skip the remote classifier entirely and use the local keyword heuristic.
 # Set to False to re-enable LLM-based routing when a paid API key is available.
 _FORCE_LOCAL_CLASSIFIER = True
