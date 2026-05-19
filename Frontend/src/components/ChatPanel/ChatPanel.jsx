@@ -2,7 +2,7 @@ import { Eraser, Loader2 } from "lucide-react";
 import { ChatMessage } from "../ChatMessage/ChatMessage";
 import { PromptComposer } from "../PromptComposer/PromptComposer";
 
-export function ChatPanel({ messages, status, error, selectedNode, onAsk, onClear }) {
+export function ChatPanel({ messages, status, error, selectedNode, onAsk, onClear, onClearNode }) {
   const isBusy = status === "answering" || status === "classifying";
 
   return (
@@ -37,7 +37,7 @@ export function ChatPanel({ messages, status, error, selectedNode, onAsk, onClea
 
       {error ? <div className="chat-error">{error}</div> : null}
 
-      <PromptComposer disabled={isBusy} selectedNode={selectedNode} onAsk={onAsk} />
+      <PromptComposer disabled={isBusy} selectedNode={selectedNode} onAsk={onAsk} onClearNode={onClearNode} />
     </section>
   );
 }

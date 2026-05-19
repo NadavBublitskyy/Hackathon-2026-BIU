@@ -23,12 +23,6 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL:-https://openrouter.ai/api/v1}
       # Pass the selected LLM model name into the container.
       LLM_MODEL_NAME: ${LLM_MODEL_NAME:-openai/gpt-4o-mini}
-      # Pass a generic LLM API key into the container when it exists.
-      LLM_API_KEY: ${LLM_API_KEY:-}
-      # Pass the OpenRouter API key into the container.
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
-      # Pass the GitHub Personal Access Token into the container.
-      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       # Pass the frontend origins allowed to call the backend.
       BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173}
     # Define host-to-container port mappings.
@@ -61,8 +55,9 @@ services:
       retries: 3
       # Give the service 20 seconds to start before healthcheck failures count.
       start_period: 20s
+    # Load secrets from the project .env file without shell interpolation overriding them.
     env_file:
-    - .env
+      - .env
 
   # Define the React/Vite frontend service.
   frontend:

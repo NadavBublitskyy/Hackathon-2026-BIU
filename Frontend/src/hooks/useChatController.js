@@ -12,12 +12,12 @@ const createMessage = (role, content, metadata = {}) => ({
   createdAt: new Date().toISOString(),
 });
 
-export const useChatController = ({ structureJson, codeChunksJson, selectedNode }) => {
+export const useChatController = ({ repoSessionId, selectedNode }) => {
   const [messages, setMessages] = useState([]);
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
 
-  const canAskRepoQuestions = useMemo(() => Boolean(structureJson && codeChunksJson), [structureJson, codeChunksJson]);
+  const canAskRepoQuestions = useMemo(() => Boolean(repoSessionId), [repoSessionId]);
 
   const askQuestion = async (prompt) => {
     let route = null;
@@ -27,18 +27,7 @@ export const useChatController = ({ structureJson, codeChunksJson, selectedNode 
     setError("");
 
     try {
-      let relevantContextJson = [];
-
-      if (canAskRepoQuestions) {
-        relevantContextJson = await vikiService.getRelevantContext({
-          prompt,
-          selectedFile: selectedNode,
-          structureJson,
-          codeChunksJson,
-        });
-      }
-
-      route = await classificationService.classifyPrompt({ prompt, selectedNode, retrievedContextJson: relevantContextJson });
+      route = await classificationService.classifyPrompt({ prompt, selectedNode, repoSessionId });
       const userMessage = createMessage("user", prompt, { route });
       assistantMessageId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
@@ -56,6 +45,7 @@ export const useChatController = ({ structureJson, codeChunksJson, selectedNode 
       setStatus("answering");
 
       let streamIterator;
+      let relevantContextJson = [];
 
       if (route.category === questionCategories.GENERAL) {
         streamIterator = brainService.streamGeneral(prompt);
@@ -64,9 +54,17 @@ export const useChatController = ({ structureJson, codeChunksJson, selectedNode 
           throw new Error("Ingest a repository before asking code-specific questions.");
         }
 
+        relevantContextJson = await vikiService.getRelevantContext({
+          prompt,
+          selectedFile: selectedNode,
+          contextScope: questionCategories.SPECIFIC_CODE,
+          repoSessionId,
+        });
+
         streamIterator = brainService.streamWithContext({
           prompt,
-          structureJson: [], // Only send code chunks, not the full repo map
+          repoSessionId,
+          contextScope: questionCategories.SPECIFIC_CODE,
           relevantContextJson,
         });
       } else {
@@ -74,9 +72,17 @@ export const useChatController = ({ structureJson, codeChunksJson, selectedNode 
           throw new Error("Ingest a repository before asking repo-wide questions.");
         }
 
+        relevantContextJson = await vikiService.getRelevantContext({
+          prompt,
+          selectedFile: null,
+          contextScope: questionCategories.REPO_WIDE,
+          repoSessionId,
+        });
+
         streamIterator = brainService.streamWithContext({
           prompt,
-          structureJson,
+          repoSessionId,
+          contextScope: questionCategories.REPO_WIDE,
           relevantContextJson,
         });
       }

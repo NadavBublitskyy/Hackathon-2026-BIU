@@ -7,7 +7,7 @@ class FileFilter:
 
     def __init__(self, allowed_extensions=None):
         # Allowed extensions can be customized, but default to common code file types
-        self.allowed_extensions = set(allowed_extensions) if allowed_extensions else {'.py', '.js', '.java', '.cpp', '.h'}
+        self.allowed_extensions = set(allowed_extensions) if allowed_extensions else {'.py', '.js', '.java', '.cpp', '.h', '.md', '.markdown'}
 
     def is_valid(self, file_path):
         # Extract the file name and extension

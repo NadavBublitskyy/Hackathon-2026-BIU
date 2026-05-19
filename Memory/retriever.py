@@ -129,6 +129,7 @@ def retrieve_snippets(
     min_score: float = 0.40,
     collection_name: str = DEFAULT_COLLECTION_NAME,
     persist_directory: str = DEFAULT_PERSIST_DIRECTORY,
+    n_results=None,
 ) -> list[dict]:
     """
     Retrieves the most relevant code snippets from an existing ChromaDB collection.
@@ -142,6 +143,8 @@ def retrieve_snippets(
 
     if min_score < 0:
         raise ValueError("min_score cannot be negative.")
+    if n_results is not None and n_results <= 0:
+        raise ValueError("n_results must be greater than 0.")
 
     client = _get_chroma_client(persist_directory)
 
@@ -160,7 +163,7 @@ def retrieve_snippets(
 
     results = collection.query(
         query_texts=[query],
-        n_results=min(_N_RESULTS_CAP, indexed_chunks_count),
+        n_results=min(n_results or _N_RESULTS_CAP, indexed_chunks_count),
         include=["documents", "metadatas", "distances"],
     )
 

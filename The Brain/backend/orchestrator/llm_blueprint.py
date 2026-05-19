@@ -1,5 +1,7 @@
 """This file builds context-aware LLM prompts from a user query, repo structure, and semantic code snippets."""
 
+from __future__ import annotations
+
 # Import Path so code snippets can get a useful language tag from their file extension.
 from pathlib import Path
 # Import Any so helpers can accept JSON structures with flexible shapes.

@@ -6,19 +6,17 @@ import { ingestionService } from "../services/ingestionService";
 export const useRepoSession = () => {
   const [repoUrl, setRepoUrl] = useState("");
   const [repoMeta, setRepoMeta] = useState(null);
-  const [structureJson, setStructureJson] = useState(null);
-  const [codeChunksJson, setCodeChunksJson] = useState(null);
+  const [repoSessionId, setRepoSessionId] = useState(null);
   const [graphData, setGraphData] = useState({ nodes: [], edges: [] });
   const [selectedNode, setSelectedNode] = useState(null);
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
 
-  const isReady = useMemo(() => Boolean(structureJson && codeChunksJson), [structureJson, codeChunksJson]);
+  const isReady = useMemo(() => Boolean(repoSessionId), [repoSessionId]);
 
   const resetRepo = () => {
     setRepoMeta(null);
-    setStructureJson(null);
-    setCodeChunksJson(null);
+    setRepoSessionId(null);
     setGraphData({ nodes: [], edges: [] });
     setSelectedNode(null);
     setStatus("idle");
@@ -44,8 +42,7 @@ export const useRepoSession = () => {
 
       const result = await ingestionService.ingestRepo(validation.normalizedUrl);
 
-      setStructureJson(result.structureJson);
-      setCodeChunksJson(result.codeChunksJson);
+      setRepoSessionId(result.repoSessionId);
       setGraphData(result.graphData);
       setStatus("ready");
     } catch (caughtError) {
@@ -60,15 +57,15 @@ export const useRepoSession = () => {
       return;
     }
 
-    const basicNode = { ...node, isLoadingDetails: Boolean(structureJson) };
+    const basicNode = { ...node, isLoadingDetails: Boolean(repoSessionId) };
     setSelectedNode(basicNode);
 
-    if (!structureJson || !node.id) {
+    if (!repoSessionId || !node.id) {
       return;
     }
 
     try {
-      const details = await graphService.getNodeDetails({ structureJson, nodeId: node.id });
+      const details = await graphService.getNodeDetails({ repoSessionId, nodeId: node.id });
       setSelectedNode((currentNode) => {
         if (currentNode?.id !== node.id) {
           return currentNode;
@@ -94,8 +91,7 @@ export const useRepoSession = () => {
   return {
     repoUrl,
     repoMeta,
-    structureJson,
-    codeChunksJson,
+    repoSessionId,
     graphData,
     selectedNode,
     status,
